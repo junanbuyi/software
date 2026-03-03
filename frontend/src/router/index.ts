@@ -6,7 +6,11 @@ import DatasetView from "../views/DatasetView.vue";
 import FunctionSelectView from "../views/FunctionSelectView.vue";
 import HomeView from "../views/HomeView.vue";
 import LoginView from "../views/LoginView.vue";
-import MarketView from "../views/MarketView.vue";
+import MarketLayout from "../views/MarketLayout.vue";
+import CompanyInfoView from "../views/CompanyInfoView.vue";
+import DisclosureView from "../views/DisclosureView.vue";
+import TradingView from "../views/TradingView.vue";
+import SettlementView from "../views/SettlementView.vue";
 import ModelsView from "../views/ModelsView.vue";
 import PredictionsView from "../views/PredictionsView.vue";
 import PredictionDetailView from "../views/PredictionDetailView.vue";
@@ -24,7 +28,17 @@ const router = createRouter({
     { path: "/predictions", name: "predictions", component: PredictionsView },
     { path: "/predictions/:id", name: "prediction-detail", component: PredictionDetailView },
     { path: "/ranking", name: "ranking", component: RankingView },
-    { path: "/market", name: "market", component: MarketView },
+    { 
+      path: "/market", 
+      component: MarketLayout,
+      redirect: "/market/company",
+      children: [
+        { path: "company", name: "market-company", component: CompanyInfoView },
+        { path: "disclosure", name: "market-disclosure", component: DisclosureView },
+        { path: "trading", name: "market-trading", component: TradingView },
+        { path: "settlement", name: "market-settlement", component: SettlementView },
+      ]
+    },
     { path: "/account", name: "account", component: AccountView },
   ],
 });

@@ -504,6 +504,16 @@ def get_balance_chart(
             for i, v in enumerate(r.period_values[:periods]):
                 solar_power[i] += float(v) if v else 0
 
+    # 水电功率
+    hydro_rows = db.query(MarketOutResult).filter(
+        MarketOutResult.sheet_name == "hydro_hp_opera_power"
+    ).all()
+    hydro_power = [0.0] * periods
+    for r in hydro_rows:
+        if isinstance(r.period_values, list):
+            for i, v in enumerate(r.period_values[:periods]):
+                hydro_power[i] += float(v) if v else 0
+
     # 负荷功率
     load_rows = db.query(MarketOutResult).filter(
         MarketOutResult.sheet_name == "load_load_bid_power"
@@ -518,6 +528,7 @@ def get_balance_chart(
         "thermal": [round(v, 4) for v in thermal_power],
         "wind": [round(v, 4) for v in wind_power],
         "solar": [round(v, 4) for v in solar_power],
+        "hydro": [round(v, 4) for v in hydro_power],
         "load": [round(v, 4) for v in load_power],
         "periods": periods,
     }
