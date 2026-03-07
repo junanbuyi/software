@@ -1,25 +1,12 @@
 <template>
   <div class="content-section">
     <h2 class="section-title">企业信息</h2>
-    <div class="card">
-      <h3 class="card-title">企业列表</h3>
-      <div class="simple-table">
-        <div class="table-header">
-          <span class="col col-id">火电厂编号</span>
-          <span class="col col-name">火电厂名称</span>
-        </div>
-        <div v-for="c in companies" :key="c.id" class="table-row clickable" @click="selectedCompany = c">
-          <span class="col col-id">{{ c.id }}</span>
-          <span class="col col-name">{{ c.name }}</span>
-        </div>
-      </div>
-    </div>
-    <!-- 机组详情 -->
-    <div v-if="selectedCompany" class="card" style="margin-top: 20px;">
-      <h3 class="card-title">企业名称：{{ selectedCompany.name }} 企业类型：火电公司</h3>
+    <!-- G13企业详情 -->
+    <div v-if="g13Company" class="card">
+      <h3 class="card-title">企业名称：{{ g13Company.name }} 企业类型：火电公司</h3>
       <h4 style="margin: 16px 0 12px; font-size: 15px;">机组信息</h4>
       <div class="unit-grid">
-        <div v-for="u in selectedCompany.units" :key="u.id" class="unit-card">
+        <div v-for="u in g13Company.units" :key="u.id" class="unit-card">
           <div class="unit-row"><span class="label">火电机组编号</span><span>{{ u.id }}</span></div>
           <div class="unit-row"><span class="label">所在母线编号</span><span>{{ u.bus }}</span></div>
           <div class="unit-row"><span class="label">装机容量(100MW)</span><span>{{ u.capacity }}</span></div>
@@ -42,6 +29,19 @@
         </div>
       </div>
     </div>
+    <div v-else-if="error" class="card">
+      <h3 class="card-title" style="color: #ff4d4f;">错误</h3>
+      <p>{{ error }}</p>
+      <div v-if="companiesList.length > 0">
+        <h4 style="margin: 16px 0 12px; font-size: 14px;">可用企业列表:</h4>
+        <ul style="margin: 0; padding-left: 20px;">
+          <li v-for="c in companiesList" :key="c.id">{{ c.id }} - {{ c.name }}</li>
+        </ul>
+      </div>
+    </div>
+    <div v-else class="card">
+      <h3 class="card-title">加载中...</h3>
+    </div>
   </div>
 </template>
 
@@ -49,20 +49,32 @@
 import { ref, onMounted } from "vue";
 import { marketApi } from "../api/market";
 
-const companies = ref<any[]>([]);
-const selectedCompany = ref<any>(null);
+const g13Company = ref<any>(null);
+const error = ref<string | null>(null);
+const companiesList = ref<any[]>([]);
 
-async function fetchCompanies() {
+async function fetchG13Company() {
   try {
+    error.value = null;
     const { data } = await marketApi.getCompanies();
-    companies.value = data.items || [];
+    const companies = data.items || [];
+    companiesList.value = companies;
+    console.log("所有企业:", companies);
+    // 查找G13企业（通过名称）
+    g13Company.value = companies.find((c: any) => c.name === "G13") || null;
+    if (!g13Company.value) {
+      console.log("未找到G13企业，企业列表:", companies.map((c: any) => ({ id: c.id, name: c.name })));
+    } else {
+      console.log("找到G13企业:", g13Company.value);
+    }
   } catch (e) { 
     console.error("获取企业信息失败", e); 
+    error.value = "获取企业信息失败，请检查网络连接";
   }
 }
 
 onMounted(() => {
-  fetchCompanies();
+  fetchG13Company();
 });
 </script>
 
@@ -109,8 +121,6 @@ onMounted(() => {
 .table-row.clickable:hover {
   background: #f5f7fa;
 }
-.col-id { width: 200px; }
-.col-name { flex: 1; }
 .unit-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));

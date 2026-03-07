@@ -3,7 +3,7 @@
     <header class="market-header">
       <h1 class="market-brand">电力市场平台</h1>
       <div class="header-actions">
-        <button class="btn outline sm" @click="goBack">返回电价预测平台</button>
+        <button class="btn outline sm" @click="goBack">返回平台选择页面</button>
       </div>
     </header>
     <div class="market-layout">
@@ -34,7 +34,7 @@ import { useRouter, useRoute } from "vue-router";
 const router = useRouter();
 const route = useRoute();
 
-const goBack = () => router.push("/home");
+const goBack = () => router.push("/functions");
 
 const navItems = [
   { key: "company", label: "企业信息", icon: "≡", path: "/market/company" },
@@ -123,6 +123,8 @@ const isActive = (path: string) => {
 }
 .nav-icon {
   font-size: 16px;
+  width: 20px;
+  text-align: center;
 }
 
 /* 右侧内容 */
