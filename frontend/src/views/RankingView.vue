@@ -7,6 +7,14 @@
     <section class="panel">
       <div class="panel-header">
         <h3 class="panel-title">模型排名</h3>
+        <div class="query-bar">
+          <input v-model="queryStartDate" type="date" class="input query-input" />
+          <span>至</span>
+          <input v-model="queryEndDate" type="date" class="input query-input" />
+          <button class="btn primary" :disabled="loading" @click="loadRankings">
+            {{ loading ? "加载中..." : "查询" }}
+          </button>
+        </div>
       </div>
       <div class="table-wrap">
         <table class="table">
@@ -167,6 +175,9 @@
               <td>{{ item.imape }}</td>
               <td>{{ item.score }}</td>
             </tr>
+            <tr v-if="!loading && filteredRankings.length === 0">
+              <td colspan="12" class="empty-row">暂无评分数据</td>
+            </tr>
           </tbody>
         </table>
       </div>
@@ -175,41 +186,30 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from "vue";
+import { computed, onMounted, ref } from "vue";
 import MainLayout from "../layouts/MainLayout.vue";
+import { fetchRankingSummary, type RankingSummary } from "../api/rankings";
 
-const rankings = ref([
-  {
-    id: 1,
-    dataset: "广东电价数据",
-    type: "周前确定",
-    model: "mamba周前",
-    period: "2024.5.1-2024.5.7",
-    load: "中负荷",
-    wind: "微风",
-    weather_type: "多云",
-    mae: "20.03",
-    rmse: "40.64",
-    r2: "0.81",
-    imape: "0.08",
-    score: "92",
-  },
-  {
-    id: 2,
-    dataset: "广东电价数据",
-    type: "周前概率",
-    model: "tcn周前",
-    period: "2024.5.1-2024.5.7",
-    load: "中负荷",
-    wind: "微风",
-    weather_type: "多云",
-    mae: "22.15",
-    rmse: "43.28",
-    r2: "0.78",
-    imape: "0.09",
-    score: "88",
-  },
-]);
+type RankingRow = {
+  id: number;
+  dataset: string;
+  type: string;
+  model: string;
+  period: string;
+  load: string;
+  wind: string;
+  weather_type: string;
+  mae: string;
+  rmse: string;
+  r2: string;
+  imape: string;
+  score: string;
+};
+
+const rankings = ref<RankingRow[]>([]);
+const loading = ref(false);
+const queryStartDate = ref("");
+const queryEndDate = ref("");
 
 const activeFilter = ref<string | null>(null);
 
@@ -234,17 +234,19 @@ const weatherOptions = computed(() => [...new Set(rankings.value.map(r => r.weat
 
 // 筛选后的数据
 const filteredRankings = computed(() => {
-  return rankings.value.filter(item => {
-    const datasetMatch = filters.value.dataset.length === 0 || filters.value.dataset.includes(item.dataset);
-    const typeMatch = filters.value.type.length === 0 || filters.value.type.includes(item.type);
-    const modelMatch = filters.value.model.length === 0 || filters.value.model.includes(item.model);
-    const periodMatch = filters.value.period.length === 0 || filters.value.period.includes(item.period);
-    const loadMatch = filters.value.load.length === 0 || filters.value.load.includes(item.load);
-    const windMatch = filters.value.wind.length === 0 || filters.value.wind.includes(item.wind);
-    const weatherMatch = filters.value.weather_type.length === 0 || filters.value.weather_type.includes(item.weather_type);
+  return rankings.value
+    .filter(item => {
+      const datasetMatch = filters.value.dataset.length === 0 || filters.value.dataset.includes(item.dataset);
+      const typeMatch = filters.value.type.length === 0 || filters.value.type.includes(item.type);
+      const modelMatch = filters.value.model.length === 0 || filters.value.model.includes(item.model);
+      const periodMatch = filters.value.period.length === 0 || filters.value.period.includes(item.period);
+      const loadMatch = filters.value.load.length === 0 || filters.value.load.includes(item.load);
+      const windMatch = filters.value.wind.length === 0 || filters.value.wind.includes(item.wind);
+      const weatherMatch = filters.value.weather_type.length === 0 || filters.value.weather_type.includes(item.weather_type);
 
-    return datasetMatch && typeMatch && modelMatch && periodMatch && loadMatch && windMatch && weatherMatch;
-  });
+      return datasetMatch && typeMatch && modelMatch && periodMatch && loadMatch && windMatch && weatherMatch;
+    })
+    .sort((a, b) => Number(b.score) - Number(a.score));
 });
 
 const toggleFilter = (field: string) => {
@@ -261,10 +263,73 @@ const toggleFilterOption = (field: string, option: string) => {
     filterArray.push(option);
   }
 };
+
+const toDateTime = (date: string, end: boolean) => {
+  if (!date) return undefined;
+  return `${date}T${end ? "23:59:59" : "00:00:00"}`;
+};
+
+const toRow = (item: RankingSummary, index: number): RankingRow => ({
+  id: item.plan_id || index + 1,
+  dataset: item.dataset,
+  type: item.type,
+  model: item.model,
+  period: item.period,
+  load: item.load,
+  wind: item.wind,
+  weather_type: item.weather_type,
+  mae: item.mae.toFixed(2),
+  rmse: item.rmse.toFixed(2),
+  r2: item.r2.toFixed(4),
+  imape: item.imape.toFixed(4),
+  score: item.score.toFixed(4),
+});
+
+const loadRankings = async (allowFallback = false) => {
+  loading.value = true;
+  try {
+    const data = await fetchRankingSummary({
+      start_time: toDateTime(queryStartDate.value, false),
+      end_time: toDateTime(queryEndDate.value, true),
+    });
+    rankings.value = data.map(toRow);
+    if (
+      allowFallback &&
+      rankings.value.length === 0 &&
+      (queryStartDate.value || queryEndDate.value)
+    ) {
+      queryStartDate.value = "";
+      queryEndDate.value = "";
+      await loadRankings(false);
+    }
+  } catch (err: any) {
+    const detail = err?.response?.data?.detail || err?.message || "未知错误";
+    alert("加载评分失败: " + detail);
+  } finally {
+    loading.value = false;
+  }
+};
+
+onMounted(() => {
+  const savedPeriod = localStorage.getItem("prediction_period");
+  if (savedPeriod) {
+    try {
+      const parsed = JSON.parse(savedPeriod);
+      queryStartDate.value = parsed.start || "";
+      queryEndDate.value = parsed.end || "";
+    } catch {
+      // ignore invalid cache
+    }
+  }
+  loadRankings(true);
+});
 </script>
 
 <style scoped>
 .panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   padding: 16px 20px;
   border-bottom: 1px solid var(--border);
 }
@@ -273,6 +338,14 @@ const toggleFilterOption = (field: string, option: string) => {
   font-weight: 600;
   color: var(--text);
   margin: 0;
+}
+.query-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.query-input {
+  width: 160px;
 }
 
 .filterable {
@@ -339,5 +412,10 @@ const toggleFilterOption = (field: string, option: string) => {
 
 .filter-options input[type="checkbox"] {
   cursor: pointer;
+}
+.empty-row {
+  text-align: center;
+  color: var(--muted);
+  padding: 24px 0;
 }
 </style>

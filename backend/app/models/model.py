@@ -23,7 +23,7 @@ class Model(Base):
     train_end_date: Mapped[date] = mapped_column(Date)
     prediction_type: Mapped[str] = mapped_column(
         Enum("day_ahead", "week_ahead", name="prediction_type_enum"),
-        default="day_ahead"
+        default="week_ahead"
     )
     status: Mapped[str] = mapped_column(
         Enum("untrained", "trained", name="model_status_enum"),

@@ -12,7 +12,7 @@ class ModelCreate(BaseModel):
     dataset_id: int
     train_start_date: date
     train_end_date: date
-    prediction_type: str  # 'day_ahead' | 'week_ahead'
+    prediction_type: str  # 'week_ahead'
 
 
 class ModelOut(BaseModel):
@@ -38,4 +38,27 @@ class ModelTrainResponse(BaseModel):
     id: int
     status: str
     trained_at: Optional[datetime]
+    selected_model: Optional[str] = None
+    selected_score: Optional[float] = None
+    retrained: Optional[bool] = None
+    used_cache: Optional[bool] = None
+    message: str
+
+
+class EpfCandidateOut(BaseModel):
+    model_name: str
+    score: float
+    mape_150: float
+    mae: float
+    rmse: float
+    r2: float
+    source_file: str
+
+
+class EpfAutoTrainResponse(BaseModel):
+    selected_model: str
+    selected_score: float
+    retrained: bool
+    used_cache: bool
+    candidates: list[EpfCandidateOut]
     message: str

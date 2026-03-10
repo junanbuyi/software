@@ -96,7 +96,7 @@
         <div class="modal-body">
           <div class="form-group">
             <label>数据集名称</label>
-            <input v-model="uploadForm.name" class="input" placeholder="请输入数据集名称" />
+            <input v-model="uploadForm.name" class="input" readonly />
           </div>
           <div class="form-group">
             <label>描述</label>
@@ -134,6 +134,7 @@ import {
 const datasets = ref<Dataset[]>([]);
 const showDetail = ref(false);
 const currentDataset = ref<Dataset | null>(null);
+const ALLOWED_DATASET_NAME = "广东电价数据";
 
 const records = ref<BaseRecord[]>([]);
 const recordsLoading = ref(false);
@@ -210,18 +211,19 @@ const onPageSizeChange = () => {
 const showUploadModal = ref(false);
 const uploading = ref(false);
 const uploadForm = reactive({
-  name: "",
+  name: ALLOWED_DATASET_NAME,
   description: "",
   file: null as File | null,
 });
 
 const openUploadModal = () => {
+  uploadForm.name = ALLOWED_DATASET_NAME;
   showUploadModal.value = true;
 };
 
 const closeUploadModal = () => {
   showUploadModal.value = false;
-  uploadForm.name = "";
+  uploadForm.name = ALLOWED_DATASET_NAME;
   uploadForm.description = "";
   uploadForm.file = null;
 };

@@ -23,3 +23,20 @@ class RankingOut(BaseModel):
     class Config:
         from_attributes = True
 
+
+class RankingSummaryOut(BaseModel):
+    plan_id: int
+    dataset: str
+    type: str
+    model: str
+    period: str
+    load: str
+    wind: str
+    weather_type: str
+    mae: float
+    rmse: float
+    r2: float
+    imape: float
+    score: float
+    sample_count: int
+

@@ -30,3 +30,32 @@ export const fetchRankings = async (query: RankingQuery = {}) => {
   return data;
 };
 
+export type RankingSummary = {
+  plan_id: number;
+  dataset: string;
+  type: string;
+  model: string;
+  period: string;
+  load: string;
+  wind: string;
+  weather_type: string;
+  mae: number;
+  rmse: number;
+  r2: number;
+  imape: number;
+  score: number;
+  sample_count: number;
+};
+
+export type RankingSummaryQuery = {
+  start_time?: string;
+  end_time?: string;
+  model_name?: string;
+  rank_type?: string;
+};
+
+export const fetchRankingSummary = async (query: RankingSummaryQuery = {}) => {
+  const { data } = await apiClient.get<RankingSummary[]>("/rankings/summary", { params: query });
+  return data;
+};
+

@@ -8,6 +8,8 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.session import Base
 
+from app.models.prediction_run import PredictionRun
+
 
 class Plan(Base):
     __tablename__ = "plan"
@@ -23,4 +25,5 @@ class Plan(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     results = relationship("PlanResult", back_populates="plan", cascade="all, delete-orphan")
+    runs = relationship("PredictionRun", back_populates="plan", cascade="all, delete-orphan")
 

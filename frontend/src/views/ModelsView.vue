@@ -34,8 +34,9 @@
               </td>
               <td>
                 <a class="link" href="#" @click.prevent="openVerifyModal(model)">数据集校核</a>
-                <a class="link" href="#">训练模型</a>
-                <a class="link" href="#">上传已训练文件</a>
+                <a class="link" href="#" @click.prevent="handleTrainModel(model)">训练模型</a>
+                <a class="link" href="#" @click.prevent="handleUploadTrainedModel(model)">上传已训练文件</a>
+                <a class="link" href="#" @click.prevent="handleDownloadTrainedModel(model)">下载训练文件</a>
               </td>
             </tr>
           </tbody>
@@ -74,7 +75,6 @@
           <div class="form-group">
             <label>预测类型 <span class="required">*</span></label>
             <select class="input">
-              <option value="day_ahead">周前确定</option>
               <option value="week_ahead">周前概率</option>
             </select>
           </div>
@@ -116,6 +116,13 @@
         </div>
       </div>
     </div>
+    <input
+      ref="trainedFileInput"
+      type="file"
+      style="display: none"
+      accept=".pt,.pth,.pkl,.joblib,.onnx,.zip,.bin,.json,.csv"
+      @change="handleTrainedFileSelect"
+    />
   </MainLayout>
 </template>
 
@@ -123,6 +130,7 @@
 import { reactive, ref } from "vue";
 import MainLayout from "../layouts/MainLayout.vue";
 import { uploadDataset, verifyDataset } from "../api/datasets";
+import { autoTrainEpfModels, downloadTrainedModelFile, uploadTrainedModelFile } from "../api/models";
 
 type ModelItem = {
   id: number;
@@ -136,6 +144,9 @@ type ModelItem = {
 const showUploadModal = ref(false);
 const showVerifyModal = ref(false);
 const verifying = ref(false);
+const training = ref(false);
+const trainedFileInput = ref<HTMLInputElement | null>(null);
+const pendingUploadModelName = ref<string>("");
 const currentModel = ref<ModelItem | null>(null);
 
 const verifyForm = reactive({
@@ -147,16 +158,32 @@ const verifyForm = reactive({
 const staticModels = ref<ModelItem[]>([
   {
     id: 1,
-    name: "LSTM周前确定",
-    description: "LSTM周前确定",
-    dataset: "陕西电价数据",
-    type: "周前确定",
+    name: "TCN周前概率",
+    description: "EPF TCN 概率预测",
+    dataset: "广东电价数据",
+    type: "周前概率",
     verify_status: "未校核",
   },
   {
     id: 2,
-    name: "TCN周前概率",
-    description: "TCN周前概率",
+    name: "Mamba周前概率",
+    description: "EPF Mamba 概率预测",
+    dataset: "广东电价数据",
+    type: "周前概率",
+    verify_status: "未校核",
+  },
+  {
+    id: 3,
+    name: "NLinear周前概率",
+    description: "EPF NLinear 概率预测",
+    dataset: "广东电价数据",
+    type: "周前概率",
+    verify_status: "未校核",
+  },
+  {
+    id: 4,
+    name: "集成周前概率",
+    description: "EPF Ensemble 概率预测",
     dataset: "广东电价数据",
     type: "周前概率",
     verify_status: "未校核",
@@ -214,6 +241,82 @@ const handleUploadAndVerify = async () => {
     console.error("校核错误详情:", err?.response?.data, err);
   } finally {
     verifying.value = false;
+  }
+};
+
+const handleTrainModel = async (model: ModelItem) => {
+  if (training.value) return;
+  training.value = true;
+  try {
+    const result = await autoTrainEpfModels();
+    const selected = result.selected_model.toLowerCase();
+    staticModels.value.forEach((item) => {
+      item.description = item.description.replace(/（已自动选中）/g, "");
+      const normalized = item.name.toLowerCase();
+      if (selected.includes("ensemble") && normalized.includes("集成")) {
+        item.description = `${item.description}（已自动选中）`;
+      } else if (selected.includes("mamba") && normalized.includes("mamba")) {
+        item.description = `${item.description}（已自动选中）`;
+      } else if (selected.includes("tcn") && normalized.includes("tcn")) {
+        item.description = `${item.description}（已自动选中）`;
+      } else if (selected.includes("nlinear") && normalized.includes("nlinear")) {
+        item.description = `${item.description}（已自动选中）`;
+      }
+    });
+    const mode = result.retrained ? "已重新训练" : "使用1分钟内缓存结果";
+    alert(
+      `训练完成（${mode}），自动选中模型：${result.selected_model}，综合得分：${result.selected_score.toFixed(4)}`
+    );
+  } catch (err: any) {
+    const detail = err?.response?.data?.detail || err?.message || "未知错误";
+    alert("训练失败: " + detail);
+  } finally {
+    training.value = false;
+  }
+};
+
+const handleUploadTrainedModel = (model: ModelItem) => {
+  pendingUploadModelName.value = model.name;
+  trainedFileInput.value?.click();
+};
+
+const handleTrainedFileSelect = async (e: Event) => {
+  const target = e.target as HTMLInputElement;
+  const file = target.files?.[0];
+  if (!file || !pendingUploadModelName.value) {
+    return;
+  }
+
+  try {
+    await uploadTrainedModelFile(pendingUploadModelName.value, file);
+    alert(`已上传训练文件：${file.name}`);
+  } catch (err: any) {
+    const detail = err?.response?.data?.detail || err?.message || "未知错误";
+    alert("上传训练文件失败: " + detail);
+  } finally {
+    target.value = "";
+    pendingUploadModelName.value = "";
+  }
+};
+
+const handleDownloadTrainedModel = async (model: ModelItem) => {
+  try {
+    const response = await downloadTrainedModelFile(model.name);
+    const blob = new Blob([response.data]);
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+
+    const disposition = response.headers["content-disposition"] as string | undefined;
+    const matched = disposition?.match(/filename="?([^"]+)"?/i);
+    link.download = matched?.[1] || `${model.name}_trained_file.bin`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(url);
+  } catch (err: any) {
+    const detail = err?.response?.data?.detail || err?.message || "未知错误";
+    alert("下载训练文件失败: " + detail);
   }
 };
 

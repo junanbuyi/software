@@ -44,11 +44,21 @@
       <section class="panel">
         <div class="panel-header">
           <h3 class="panel-title">模型名称</h3>
+          <button class="btn sm" @click="showModelPicker = true">选择模型</button>
         </div>
-        <div class="model-list">
-          <div class="model-item" v-for="model in models" :key="model.id" @click="model.selected = !model.selected">
-            <span class="model-name" :class="{ active: model.selected }">{{ model.name }}</span>
+        <div class="model-scroll">
+          <button class="scroll-btn" @click="scrollModels(-200)">◀</button>
+          <div class="model-list" ref="modelListRef">
+            <div
+              class="model-item"
+              v-for="model in models"
+              :key="model.id"
+              @click="selectModel(model.id)"
+            >
+              <span class="model-name" :class="{ active: model.selected }">{{ model.name }}</span>
+            </div>
           </div>
+          <button class="scroll-btn" @click="scrollModels(200)">▶</button>
         </div>
       </section>
 
@@ -67,7 +77,7 @@
           <div class="chart-legend" v-if="hasCalculated && chartDataAvailable">
             <template v-if="!isTcnPlan">
               <span class="legend-item"><span class="line-solid blue"></span> 电价实际值</span>
-              <span class="legend-item"><span class="line-dashed orange"></span> mamba预测值</span>
+              <span class="legend-item"><span class="line-dashed orange"></span> {{ modelDisplayName }}</span>
               <span class="legend-item"><span class="square red"></span> 负荷</span>
             </template>
             <template v-else>
@@ -165,7 +175,10 @@
           </div>
           <div v-else-if="loading" class="chart-empty">加载中...</div>
           <div v-else-if="hasCalculated && !chartDataAvailable" class="chart-empty">
-            所选日期范围无数据。预测数据范围：2024-03-22 至 2024-07-18
+            所选日期范围无数据。
+            <span v-if="availableRange.start && availableRange.end">
+              预测数据范围：{{ availableRange.start }} 至 {{ availableRange.end }}
+            </span>
           </div>
           <div v-else class="chart-empty">
             <p v-if="selectedModels.length === 0">请先选择至少一个模型</p>
@@ -175,6 +188,34 @@
         </div>
       </section>
     </div>
+
+    <div v-if="showModelPicker" class="modal-overlay" @click.self="showModelPicker = false">
+      <div class="modal">
+        <div class="modal-header">
+          <h3>选择模型</h3>
+          <button class="modal-close" @click="showModelPicker = false">&times;</button>
+        </div>
+        <div class="modal-body">
+          <div v-if="models.length === 0" class="empty-row">暂无可选模型</div>
+          <div v-else class="model-picker">
+            <label v-for="model in models" :key="model.id" class="picker-item">
+              <input
+                type="radio"
+                name="model-picker"
+                :value="model.id"
+                :checked="model.selected"
+                @change="selectModel(model.id)"
+              />
+              <span>{{ model.name }}</span>
+            </label>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn" @click="showModelPicker = false">取消</button>
+          <button class="btn primary" @click="showModelPicker = false">确定</button>
+        </div>
+      </div>
+    </div>
   </MainLayout>
 </template>
 
@@ -182,13 +223,13 @@
 import { computed, ref, onMounted } from "vue";
 import { useRouter, useRoute } from "vue-router";
 import MainLayout from "../layouts/MainLayout.vue";
+import { fetchModels } from "../api/models";
 
 const router = useRouter();
 const route = useRoute();
 const API_BASE = "http://127.0.0.1:8000/api";
 
 const planId = computed(() => Number(route.params.id) || 1);
-const isTcnPlan = computed(() => planId.value === 2);
 
 type PredictionRecord = {
   record_time: string;
@@ -224,21 +265,29 @@ const periodEnd = ref("2024-07-01");
 
 const selectedDate = computed(() => periodEnd.value);
 
-const planConfigs: Record<number, { name: string; dataset: string; type: string; description: string }> = {
-  1: { name: "Mamba周前确定", dataset: "广东电价数据", type: "周前确定", description: "广东mamba周前" },
-  2: { name: "tcn周前概率", dataset: "广东电价数据", type: "周前概率", description: "广东tcn周前概率预测" },
-};
-
-const plan = computed(() => planConfigs[planId.value] || planConfigs[1]);
-
-const models = computed(() => {
-  if (isTcnPlan.value) {
-    return [{ id: 1, name: "tcn周前", selected: true }];
-  }
-  return [{ id: 1, name: "Mamba周前确定", selected: true }];
+const plan = ref<{ name: string; dataset: string; type: string; description: string }>({
+  name: "电价预测方案",
+  dataset: "广东电价数据",
+  type: "周前概率",
+  description: "",
 });
 
-const selectedModels = computed(() => models.value);
+const models = ref<{ id: number; name: string; selected: boolean }[]>([]);
+const currentRunId = ref<number | null>(null);
+const showModelPicker = ref(false);
+const modelListRef = ref<HTMLDivElement | null>(null);
+const availableRange = ref<{ start: string; end: string }>({ start: "", end: "" });
+
+const isTcnPlan = computed(() => {
+  const name = (plan.value.name || "").toLowerCase();
+  return name.includes("tcn");
+});
+
+const selectedModels = computed(() => models.value.filter((m) => m.selected));
+const modelDisplayName = computed(() => {
+  const name = selectedModels.value[0]?.name;
+  return name ? `${name}预测值` : "模型预测值";
+});
 const getAuthToken = () => localStorage.getItem("access_token") || "";
 
 const fetchDatasetId = async () => {
@@ -250,10 +299,28 @@ const fetchDatasetId = async () => {
       const data = await res.json();
       if (data.items && data.items.length > 0) {
         currentDatasetId.value = data.items[0].id;
+        await loadDatasetRange(currentDatasetId.value);
       }
     }
   } catch (e) {
     console.error("获取数据集失败", e);
+  }
+};
+
+const loadDatasetRange = async (datasetId: number) => {
+  try {
+    const res = await fetch(`${API_BASE}/datasets/${datasetId}/records/range`, {
+      headers: { Authorization: `Bearer ${getAuthToken()}` },
+    });
+    if (res.ok) {
+      const data = await res.json();
+      availableRange.value = {
+        start: data.start_time ? data.start_time.slice(0, 10) : "",
+        end: data.end_time ? data.end_time.slice(0, 10) : "",
+      };
+    }
+  } catch (e) {
+    console.error("获取数据范围失败", e);
   }
 };
 
@@ -263,17 +330,16 @@ const formatLocalDateTime = (d: Date) => {
 };
 
 const fetchPredictionData = async () => {
-  if (!periodEnd.value || !currentDatasetId.value) return;
-  
+  if (!periodEnd.value || !currentRunId.value) return;
+
   const startDate = new Date(`${periodStart.value}T00:00:00`);
   const endDate = new Date(`${periodEnd.value}T23:59:59`);
-  
   const startTime = formatLocalDateTime(startDate);
   const endTime = formatLocalDateTime(endDate);
-  
+
   try {
     const res = await fetch(
-      `${API_BASE}/chart/prediction?dataset_id=${currentDatasetId.value}&start_time=${startTime}&end_time=${endTime}`,
+      `${API_BASE}/plans/${planId.value}/runs/${currentRunId.value}/records?start_time=${startTime}&end_time=${endTime}&size=5000`,
       { headers: { Authorization: `Bearer ${getAuthToken()}` } }
     );
     if (res.ok) {
@@ -362,6 +428,10 @@ const handleCalculate = async () => {
     alert("无法获取数据集，请刷新页面重试");
     return;
   }
+  await createRun();
+  if (!currentRunId.value) {
+    return;
+  }
   loading.value = true;
   await doFetchData();
   loading.value = false;
@@ -384,10 +454,182 @@ const loadSavedState = () => {
   }
 };
 
+const loadPlanInfo = async () => {
+  try {
+    const res = await fetch(`${API_BASE}/plans/${planId.value}`, {
+      headers: { Authorization: `Bearer ${getAuthToken()}` },
+    });
+    if (res.ok) {
+      const data = await res.json();
+      plan.value = {
+        name: data.name,
+        dataset: "广东电价数据",
+        type: "周前概率",
+        description: data.description || "",
+      };
+      currentDatasetId.value = data.dataset_id || null;
+      if (currentDatasetId.value) {
+        await loadDatasetRange(currentDatasetId.value);
+      }
+      if (models.value.length === 0) {
+        models.value = [
+          {
+            id: data.id || 1,
+            name: data.name || "周前概率",
+            selected: true,
+          },
+        ];
+      }
+    }
+  } catch (e) {
+    console.error("获取方案失败", e);
+    if (!plan.value.name) {
+      plan.value.name = `方案${planId.value}`;
+    }
+  }
+};
+
+const loadModels = async () => {
+  try {
+    const data = await fetchModels({ page: 1, size: 200 });
+    models.value = data.items.map((item) => ({
+      id: item.id,
+      name: item.name,
+      selected: false,
+    }));
+    if (models.value.length > 0) {
+      models.value[0].selected = true;
+      return;
+    }
+    if (!models.value.length) {
+      models.value = [
+        {
+          id: 0,
+          name: plan.value.name || "默认模型",
+          selected: true,
+        },
+      ];
+    }
+  } catch (e) {
+    console.error("获取模型列表失败", e);
+    if (!models.value.length) {
+      models.value = [
+        {
+          id: 0,
+          name: plan.value.name || "默认模型",
+          selected: true,
+        },
+      ];
+    }
+  }
+};
+
+const selectModel = (modelId: number) => {
+  models.value = models.value.map((m) => ({
+    ...m,
+    selected: m.id === modelId,
+  }));
+  if (!plan.value.name) {
+    const current = models.value.find((m) => m.selected);
+    if (current) {
+      plan.value.name = current.name;
+    }
+  }
+};
+
+const scrollModels = (offset: number) => {
+  if (!modelListRef.value) return;
+  modelListRef.value.scrollBy({ left: offset, behavior: "smooth" });
+};
+
+const loadLatestRun = async () => {
+  try {
+    const res = await fetch(`${API_BASE}/plans/${planId.value}/runs/latest`, {
+      headers: { Authorization: `Bearer ${getAuthToken()}` },
+    });
+    if (res.ok) {
+      const data = await res.json();
+      currentRunId.value = data.id;
+      if (data.start_time) {
+        periodStart.value = data.start_time.slice(0, 10);
+      }
+      if (data.end_time) {
+        periodEnd.value = data.end_time.slice(0, 10);
+      }
+    }
+  } catch (e) {
+    // no latest run yet
+  }
+};
+
+const createRun = async () => {
+  try {
+    const selected = selectedModels.value[0];
+    if (!selected) {
+      alert("请先选择模型名称");
+      return;
+    }
+    const payload = {
+      task_type: "prediction_run",
+      payload_json: JSON.stringify({
+        plan_id: planId.value,
+        model_id: selected.id > 0 ? selected.id : null,
+        start_time: periodStart.value ? `${periodStart.value}T00:00:00` : null,
+        end_time: periodEnd.value ? `${periodEnd.value}T23:59:59` : null,
+      }),
+      max_retries: 1,
+    };
+    const res = await fetch(`${API_BASE}/tasks`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${getAuthToken()}`,
+      },
+      body: JSON.stringify(payload),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      await waitForTask(data.id);
+    } else {
+      const err = await res.json();
+      alert("计算失败: " + (err?.detail || "未知错误"));
+    }
+  } catch (e) {
+    alert("计算失败，请稍后重试");
+  }
+};
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const waitForTask = async (taskId: number) => {
+  const maxWait = 120000;
+  const started = Date.now();
+  while (Date.now() - started < maxWait) {
+    const res = await fetch(`${API_BASE}/tasks/${taskId}`, {
+      headers: { Authorization: `Bearer ${getAuthToken()}` },
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (data.status === "completed") {
+        await loadLatestRun();
+        return;
+      }
+      if (data.status === "failed") {
+        alert("计算失败: " + (data.last_error || "未知错误"));
+        return;
+      }
+    }
+    await sleep(1000);
+  }
+  alert("计算超时，请稍后在运行记录查看结果");
+};
+
 onMounted(async () => {
   loadSavedState();
-  await fetchDatasetId();
-  if (hasCalculated.value && predictionData.value.length === 0 && currentDatasetId.value) {
+  await loadPlanInfo();
+  await loadModels();
+  await loadLatestRun();
+  if (currentRunId.value) {
     await fetchPredictionData();
     if (predictionData.value.length > 0) {
       hasCalculated.value = true;
@@ -635,25 +877,57 @@ const tcnLoadYAxisLabels = computed(() => {
   gap: 20px;
 }
 .model-list {
-  padding: 16px 20px;
+  padding: 16px 12px;
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   gap: 12px;
+  overflow-x: auto;
+  scrollbar-width: thin;
 }
 .model-item {
   display: flex;
   align-items: center;
   gap: 10px;
   font-size: 14px;
+  white-space: nowrap;
 }
 .model-name {
   color: #333;
   font-weight: 500;
   cursor: pointer;
   transition: color 0.2s;
+  padding: 6px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: #fff;
 }
 .model-name.active {
   color: var(--primary);
+  border-color: var(--primary);
+  background: rgba(24, 144, 255, 0.08);
+}
+.model-scroll {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px 12px 12px;
+}
+.scroll-btn {
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--border);
+  background: #fff;
+  border-radius: 4px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+}
+.scroll-btn:hover {
+  background: var(--primary);
+  color: #fff;
+  border-color: var(--primary);
 }
 .period-cell {
   display: flex;

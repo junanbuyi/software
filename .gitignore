@@ -23,6 +23,11 @@ venv/
 # Local config
 backend/app/core/config.py
 
+# Local data/artifacts
+backend/storage/
+epf/
+market_convert/
+
 # IDE
 .vscode/
 .idea/

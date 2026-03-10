@@ -10,11 +10,30 @@ export type Model = {
   dataset_id: number;
   train_start_date: string;
   train_end_date: string;
-  prediction_type: "day_ahead" | "week_ahead";
+  prediction_type: "week_ahead";
   status: "untrained" | "trained";
   trained_at?: string | null;
   created_at: string;
   updated_at: string;
+};
+
+export type EpfCandidate = {
+  model_name: string;
+  score: number;
+  mape_150: number;
+  mae: number;
+  rmse: number;
+  r2: number;
+  source_file: string;
+};
+
+export type EpfAutoTrainResult = {
+  selected_model: string;
+  selected_score: number;
+  retrained: boolean;
+  used_cache: boolean;
+  candidates: EpfCandidate[];
+  message: string;
 };
 
 export type ModelsQuery = {
@@ -37,10 +56,43 @@ export const uploadModel = async (formData: FormData) => {
 };
 
 export const trainModel = async (modelId: number) => {
-  const { data } = await apiClient.post<{ id: number; status: string; trained_at: string; message: string }>(
-    `/models/${modelId}/train`
-  );
+  const { data } = await apiClient.post<{
+    id: number;
+    status: string;
+    trained_at: string;
+    selected_model?: string;
+    selected_score?: number;
+    retrained?: boolean;
+    used_cache?: boolean;
+    message: string;
+  }>(`/models/${modelId}/train`);
   return data;
+};
+
+export const autoTrainEpfModels = async () => {
+  const { data } = await apiClient.post<EpfAutoTrainResult>("/models/auto-train");
+  return data;
+};
+
+export const uploadTrainedModelFile = async (modelName: string, file: File) => {
+  const formData = new FormData();
+  formData.append("model_name", modelName);
+  formData.append("file", file);
+  const { data } = await apiClient.post<{
+    message: string;
+    model_name: string;
+    stored_name: string;
+  }>("/models/trained-files/upload", formData, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
+  return data;
+};
+
+export const downloadTrainedModelFile = async (modelName: string) => {
+  return apiClient.get("/models/trained-files/download", {
+    params: { model_name: modelName },
+    responseType: "blob",
+  });
 };
 
 export const deleteModel = async (modelId: number) => {

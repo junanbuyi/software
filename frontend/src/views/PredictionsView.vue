@@ -34,6 +34,9 @@
                 <a class="link danger" href="#" @click.prevent="handleDelete(plan)">删除</a>
               </td>
             </tr>
+            <tr v-if="!loading && plans.length === 0">
+              <td colspan="6" class="empty-row">暂无方案数据</td>
+            </tr>
           </tbody>
         </table>
       </div>
@@ -56,13 +59,11 @@
             <select class="input">
               <option value="">请选择数据集</option>
               <option>广东电价数据</option>
-              <option>陕西电价数据</option>
             </select>
           </div>
           <div class="form-group">
             <label>预测类型 <span class="required">*</span></label>
             <select class="input">
-              <option>周前确定</option>
               <option>周前概率</option>
             </select>
           </div>
@@ -91,10 +92,13 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed, onMounted, ref } from "vue";
 import MainLayout from "../layouts/MainLayout.vue";
+import { fetchDatasets } from "../api/datasets";
+import { deletePlan, fetchPlans } from "../api/plans";
 
 const showCreateModal = ref(false);
+const loading = ref(false);
 
 const STORAGE_KEY = "predict_selected_date";
 
@@ -111,32 +115,64 @@ const periodText = computed(() => {
   return "2024.06.25-2024.07.01";
 });
 
-const plans = ref([
-  {
-    id: 1,
-    name: "Mamba周前确定",
-    dataset: "广东电价数据",
-    type: "周前确定",
-    description: "广东mamba周前",
-  },
-  {
-    id: 2,
-    name: "tcn周前概率",
-    dataset: "广东电价数据",
-    type: "周前概率",
-    description: "广东tcn周前概率预测",
-  },
-]);
+type PlanViewItem = {
+  id: number;
+  name: string;
+  dataset: string;
+  type: string;
+  description: string;
+};
+
+const plans = ref<PlanViewItem[]>([]);
+
+const typeToLabel = (planType: string) => {
+  const text = (planType || "").toLowerCase();
+  if (text.includes("week") || text.includes("周")) return "周前概率";
+  return "周前概率";
+};
+
+const loadPlans = async () => {
+  loading.value = true;
+  try {
+    const [planRes, datasetRes] = await Promise.all([
+      fetchPlans({ page: 1, size: 200 }),
+      fetchDatasets({ page: 1, size: 200 }),
+    ]);
+    const datasetMap = new Map<number, string>(
+      datasetRes.items.map((item) => [item.id, item.name]),
+    );
+    plans.value = planRes.items.map((item) => ({
+      id: item.id,
+      name: item.name,
+      dataset: item.dataset_id ? datasetMap.get(item.dataset_id) || "广东电价数据" : "广东电价数据",
+      type: typeToLabel(item.plan_type),
+      description: item.description || "-",
+    }));
+  } catch (err: any) {
+    const detail = err?.response?.data?.detail || err?.message || "未知错误";
+    alert("加载方案失败: " + detail);
+  } finally {
+    loading.value = false;
+  }
+};
 
 const getPeriod = (_plan: any) => {
   return periodText.value;
 };
 
-const handleDelete = (plan: any) => {
+const handleDelete = async (plan: PlanViewItem) => {
   if (confirm(`确定删除方案 "${plan.name}" 吗？`)) {
-    plans.value = plans.value.filter((p) => p.id !== plan.id);
+    try {
+      await deletePlan(plan.id);
+      await loadPlans();
+    } catch (err: any) {
+      const detail = err?.response?.data?.detail || err?.message || "未知错误";
+      alert("删除失败: " + detail);
+    }
   }
 };
+
+onMounted(loadPlans);
 </script>
 
 <style scoped>
@@ -220,5 +256,10 @@ const handleDelete = (plan: any) => {
   display: flex;
   justify-content: flex-end;
   gap: 10px;
+}
+.empty-row {
+  text-align: center;
+  color: var(--muted);
+  padding: 24px 0;
 }
 </style>

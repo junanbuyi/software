@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 
 from app.models.dataset_record import DatasetRecord
 from app.models.model import Model
+from app.models.base_price_data import BasePriceData
 
 
 class PredictionMetrics:
@@ -60,22 +61,18 @@ def get_base_model_prediction(
     获取Base模型的预测值。
     
     Base模型逻辑：
-    - 日前预测(day_ahead): 返回前一天同时刻的电价值
     - 周前预测(week_ahead): 返回前一周同时刻的电价值
     
     Args:
         db: 数据库会话
         dataset_id: 数据集ID
         record_time: 预测时间点
-        prediction_type: 预测类型 ('day_ahead' 或 'week_ahead')
+        prediction_type: 预测类型 ('week_ahead')
     
     Returns:
         预测的电价值，如果没有历史数据则返回None
     """
-    if prediction_type == "day_ahead":
-        # 日前预测：获取前一天同时刻的数据
-        lookup_time = record_time - timedelta(days=1)
-    elif prediction_type == "week_ahead":
+    if prediction_type == "week_ahead":
         # 周前预测：获取前一周同时刻的数据
         lookup_time = record_time - timedelta(weeks=1)
     else:
@@ -89,6 +86,12 @@ def get_base_model_prediction(
     
     if record:
         return float(record.price_kwh)
+
+    base_record = db.query(BasePriceData).filter(
+        BasePriceData.record_time == lookup_time,
+    ).first()
+    if base_record:
+        return float(base_record.price_kwh)
     
     return None
 

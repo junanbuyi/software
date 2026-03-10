@@ -56,3 +56,56 @@ export const fetchPlanResults = async (planId: number) => {
   return data;
 };
 
+export type PredictionRun = {
+  id: number;
+  plan_id: number;
+  model_id?: number | null;
+  status: string;
+  start_time?: string | null;
+  end_time?: string | null;
+  record_count: number;
+  mae?: number | null;
+  rmse?: number | null;
+  r2?: number | null;
+  imape?: number | null;
+  score?: number | null;
+  message?: string | null;
+  created_at: string;
+  finished_at?: string | null;
+};
+
+export type PredictionRunRecord = {
+  id: number;
+  run_id: number;
+  record_time: string;
+  actual_price: number;
+  predicted_price: number;
+  load_kw: number;
+};
+
+export const createPredictionRun = async (planId: number, payload: {
+  start_time?: string;
+  end_time?: string;
+  model_id?: number;
+}) => {
+  const { data } = await apiClient.post<PredictionRun>(`/plans/${planId}/runs`, payload);
+  return data;
+};
+
+export const fetchLatestPredictionRun = async (planId: number) => {
+  const { data } = await apiClient.get<PredictionRun>(`/plans/${planId}/runs/latest`);
+  return data;
+};
+
+export const fetchPredictionRunRecords = async (
+  planId: number,
+  runId: number,
+  query: { page?: number; size?: number; start_time?: string; end_time?: string } = {},
+) => {
+  const { data } = await apiClient.get<Paginated<PredictionRunRecord>>(
+    `/plans/${planId}/runs/${runId}/records`,
+    { params: query },
+  );
+  return data;
+};
+

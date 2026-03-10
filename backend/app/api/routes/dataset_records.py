@@ -5,6 +5,7 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 
 from app.api.deps import get_current_admin
 from app.db.deps import get_db
@@ -55,4 +56,20 @@ def create_record(
     db.commit()
     db.refresh(record)
     return record
+
+
+@router.get("/range")
+def get_records_range(
+    dataset_id: int,
+    db: Session = Depends(get_db),
+    _admin=Depends(get_current_admin),
+):
+    min_t, max_t = db.query(
+        func.min(DatasetRecord.record_time),
+        func.max(DatasetRecord.record_time),
+    ).filter(DatasetRecord.dataset_id == dataset_id).one()
+    return {
+        "start_time": min_t.isoformat() if min_t else None,
+        "end_time": max_t.isoformat() if max_t else None,
+    }
 

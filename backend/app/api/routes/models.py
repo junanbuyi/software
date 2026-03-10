@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 import os
+import re
+import uuid
 from datetime import datetime
+from pathlib import Path
 from typing import Optional
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
@@ -9,10 +12,17 @@ from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_admin
+from app.core.config import get_settings
 from app.db.deps import get_db
 from app.models.model import Model
 from app.schemas.common import Paginated
-from app.schemas.model import ModelOut, ModelTrainResponse
+from app.schemas.model import (
+    EpfAutoTrainResponse,
+    EpfCandidateOut,
+    ModelOut,
+    ModelTrainResponse,
+)
+from app.services.epf_model_selector import select_best_epf_model
 from app.services.storage_service import delete_file, save_upload_file
 from app.utils.pagination import paginate
 
@@ -28,7 +38,6 @@ def list_models(
     db: Session = Depends(get_db),
     _admin=Depends(get_current_admin),
 ) -> Paginated[ModelOut]:
-    """获取模型列表"""
     query = db.query(Model)
     if keyword:
         query = query.filter(Model.name.contains(keyword))
@@ -50,26 +59,23 @@ def upload_model(
     db: Session = Depends(get_db),
     _admin=Depends(get_current_admin),
 ) -> Model:
-    """上传模型文件"""
-    # 验证文件类型
-    if not file.filename.endswith(".py"):
-        raise HTTPException(status_code=400, detail="只支持Python文件(.py)")
-    
-    # 验证预测类型
-    if prediction_type not in ("day_ahead", "week_ahead"):
-        raise HTTPException(status_code=400, detail="预测类型必须是 day_ahead 或 week_ahead")
-    
+    if not (file.filename or "").endswith(".py"):
+        raise HTTPException(status_code=400, detail="Only Python model files (.py) are supported.")
+
+    if prediction_type != "week_ahead":
+        raise HTTPException(status_code=400, detail="Only week_ahead is supported.")
+
     content = file.file.read()
     if not content:
-        raise HTTPException(status_code=400, detail="文件为空")
-    
-    stored_name, stored_path = save_upload_file(content, file.filename)
-    
+        raise HTTPException(status_code=400, detail="Uploaded model file is empty.")
+
+    _, stored_path = save_upload_file(content, file.filename or "model.py")
+
     model = Model(
         name=name,
         description=description,
         file_path=stored_path,
-        original_name=file.filename,
+        original_name=file.filename or "model.py",
         dataset_id=dataset_id,
         train_start_date=train_start_date,
         train_end_date=train_end_date,
@@ -82,16 +88,134 @@ def upload_model(
     return model
 
 
+def _sanitize_model_name(model_name: str) -> str:
+    sanitized = re.sub(r"[^a-zA-Z0-9_\-\u4e00-\u9fff]+", "_", model_name).strip("_")
+    return sanitized or "model"
+
+
+def _trained_model_dir(model_name: str) -> Path:
+    settings = get_settings()
+    base = Path(settings.upload_dir) / "trained_models" / _sanitize_model_name(model_name)
+    base.mkdir(parents=True, exist_ok=True)
+    return base
+
+
+def _match_epf_folder(model_name: str) -> Optional[str]:
+    name = model_name.lower()
+    if "ensemble" in name or "集成" in model_name:
+        return "ensemble"
+    if "mamba" in name:
+        return "mamba"
+    if "nlinear" in name:
+        return "nlinear"
+    if "tcn" in name:
+        return "tcn"
+    return None
+
+
+def _latest_epf_results_json(model_name: str) -> Optional[Path]:
+    folder = _match_epf_folder(model_name)
+    if not folder:
+        return None
+    root = Path(__file__).resolve().parents[4] / "epf" / folder
+    candidates = list(root.glob("results/**/results.json"))
+    if not candidates:
+        return None
+    return max(candidates, key=lambda p: p.stat().st_mtime)
+
+
+@router.post("/trained-files/upload")
+def upload_trained_file(
+    model_name: str = Form(...),
+    file: UploadFile = File(...),
+    _admin=Depends(get_current_admin),
+) -> dict:
+    content = file.file.read()
+    if not content:
+        raise HTTPException(status_code=400, detail="Uploaded file is empty.")
+
+    file_name = file.filename or "trained_model.bin"
+    timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
+    stored_name = f"{timestamp}_{uuid.uuid4().hex}_{file_name}"
+    target_path = _trained_model_dir(model_name) / stored_name
+    target_path.write_bytes(content)
+
+    return {
+        "message": "Trained file uploaded.",
+        "model_name": model_name,
+        "stored_name": stored_name,
+    }
+
+
+@router.get("/trained-files/download")
+def download_trained_file(
+    model_name: str,
+    _admin=Depends(get_current_admin),
+) -> FileResponse:
+    model_dir = _trained_model_dir(model_name)
+    uploaded_files = [p for p in model_dir.iterdir() if p.is_file()]
+    if uploaded_files:
+        latest_uploaded = max(uploaded_files, key=lambda p: p.stat().st_mtime)
+        return FileResponse(str(latest_uploaded), filename=latest_uploaded.name)
+
+    fallback = _latest_epf_results_json(model_name)
+    if fallback and fallback.exists():
+        return FileResponse(str(fallback), filename=f"{_sanitize_model_name(model_name)}_latest_results.json")
+
+    raise HTTPException(
+        status_code=404,
+        detail="No trained file found for this model. Please upload one first.",
+    )
+
+
+@router.post("/auto-train", response_model=EpfAutoTrainResponse)
+def auto_train_with_epf(
+    _admin=Depends(get_current_admin),
+) -> EpfAutoTrainResponse:
+    """
+    Evaluate EPF model outputs with weighted metrics and automatically select
+    the best model.
+    """
+    try:
+        selection = select_best_epf_model()
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    candidates = [
+        EpfCandidateOut(
+            model_name=item.model_name,
+            score=item.score,
+            mape_150=item.metrics["MAPE_150"],
+            mae=item.metrics["MAE"],
+            rmse=item.metrics["RMSE"],
+            r2=item.metrics["R2"],
+            source_file=item.source_file,
+        )
+        for item in selection.candidates
+    ]
+
+    return EpfAutoTrainResponse(
+        selected_model=selection.selected_model,
+        selected_score=selection.selected_score,
+        retrained=selection.retrained,
+        used_cache=selection.used_cache,
+        candidates=candidates,
+        message=(
+            f"Best model: {selection.selected_model}. "
+            f"{selection.detail}"
+        ),
+    )
+
+
 @router.get("/{model_id}", response_model=ModelOut)
 def get_model(
     model_id: int,
     db: Session = Depends(get_db),
     _admin=Depends(get_current_admin),
 ) -> Model:
-    """获取模型详情"""
     model = db.query(Model).filter(Model.id == model_id).first()
     if not model:
-        raise HTTPException(status_code=404, detail="模型不存在")
+        raise HTTPException(status_code=404, detail="Model not found.")
     return model
 
 
@@ -101,28 +225,57 @@ def train_model(
     db: Session = Depends(get_db),
     _admin=Depends(get_current_admin),
 ) -> ModelTrainResponse:
-    """训练模型"""
     model = db.query(Model).filter(Model.id == model_id).first()
     if not model:
-        raise HTTPException(status_code=404, detail="模型不存在")
-    
-    if model.status == "trained":
-        raise HTTPException(status_code=400, detail="模型已训练")
-    
-    # TODO: 实际的模型训练逻辑
-    # 目前只更新状态
+        raise HTTPException(status_code=404, detail="Model not found.")
+
+    try:
+        selection = select_best_epf_model()
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
     model.status = "trained"
     model.trained_at = datetime.utcnow()
+    model.description = _append_auto_selection_note(
+        model.description,
+        selection.selected_model,
+        selection.selected_score,
+    )
     db.add(model)
     db.commit()
     db.refresh(model)
-    
+
     return ModelTrainResponse(
         id=model.id,
         status=model.status,
         trained_at=model.trained_at,
-        message="训练完成"
+        selected_model=selection.selected_model,
+        selected_score=selection.selected_score,
+        retrained=selection.retrained,
+        used_cache=selection.used_cache,
+        message=(
+            f"Training completed by EPF auto-selection: {selection.selected_model}. "
+            f"{selection.detail}"
+        ),
     )
+
+
+def _append_auto_selection_note(
+    description: Optional[str],
+    selected_model: str,
+    selected_score: float,
+) -> str:
+    note = f"[EPF_AUTO_SELECTED] {selected_model} (score={selected_score:.6f})"
+    if not description:
+        return note
+
+    cleaned_lines = [
+        line
+        for line in description.splitlines()
+        if not line.strip().startswith("[EPF_AUTO_SELECTED]")
+    ]
+    cleaned_lines.append(note)
+    return "\n".join(cleaned_lines)
 
 
 @router.delete("/{model_id}")
@@ -131,14 +284,11 @@ def delete_model(
     db: Session = Depends(get_db),
     _admin=Depends(get_current_admin),
 ) -> dict:
-    """删除模型"""
     model = db.query(Model).filter(Model.id == model_id).first()
     if not model:
-        raise HTTPException(status_code=404, detail="模型不存在")
-    
-    # 删除物理文件
+        raise HTTPException(status_code=404, detail="Model not found.")
+
     delete_file(model.file_path)
-    
     db.delete(model)
     db.commit()
-    return {"message": "删除成功"}
+    return {"message": "Deleted"}

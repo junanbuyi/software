@@ -17,11 +17,29 @@ from app.models.prediction_detail import PredictionDetail
 from app.models.plan import Plan
 from app.schemas.common import Paginated
 from app.schemas.dataset import DatasetCreate, DatasetOut, DatasetUpdate
+from app.services.csv_service import validate_csv_structure
 from app.services.storage_service import delete_file, save_upload_file
 from app.services.excel_service import parse_excel_file, parse_csv_file, validate_excel_structure
+from app.services.political_compliance import check_dataset_political_compliance
 from app.utils.pagination import paginate
 
 router = APIRouter(prefix="/datasets", tags=["datasets"])
+ALLOWED_DATASET_NAME = "广东电价数据"
+
+
+def _ensure_allowed_dataset_name(name: str) -> str:
+    normalized = (name or "").strip()
+    if normalized != ALLOWED_DATASET_NAME:
+        raise HTTPException(
+            status_code=400,
+            detail=f"仅允许使用数据集: {ALLOWED_DATASET_NAME}",
+        )
+    return normalized
+
+
+def _ensure_allowed_dataset(dataset: Dataset) -> None:
+    if dataset.name != ALLOWED_DATASET_NAME:
+        raise HTTPException(status_code=404, detail="Dataset not found")
 
 
 @router.get("", response_model=Paginated[DatasetOut])
@@ -32,7 +50,7 @@ def list_datasets(
     db: Session = Depends(get_db),
     _admin=Depends(get_current_admin),
 ) -> Paginated[DatasetOut]:
-    query = db.query(Dataset)
+    query = db.query(Dataset).filter(Dataset.name == ALLOWED_DATASET_NAME)
     if keyword:
         query = query.filter(Dataset.name.contains(keyword))
     total, items = paginate(query.order_by(Dataset.id.desc()), page, size)
@@ -45,8 +63,9 @@ def create_dataset(
     db: Session = Depends(get_db),
     current_admin=Depends(get_current_admin),
 ) -> Dataset:
+    name = _ensure_allowed_dataset_name(payload.name)
     dataset = Dataset(
-        name=payload.name,
+        name=name,
         description=payload.description,
         created_by=current_admin.id,
     )
@@ -116,7 +135,8 @@ def upload_dataset(
         raise HTTPException(status_code=400, detail=f"解析数据失败: {str(e)}")
     
     # 检查是否存在同名数据集
-    existing_dataset = db.query(Dataset).filter(Dataset.name == name).first()
+    normalized_name = _ensure_allowed_dataset_name(name)
+    existing_dataset = db.query(Dataset).filter(Dataset.name == normalized_name).first()
     
     if existing_dataset:
         # 删除旧数据集的记录，准备用新数据覆盖
@@ -129,7 +149,7 @@ def upload_dataset(
     else:
         # 创建新数据集，状态为未校核
         dataset = Dataset(
-            name=name,
+            name=normalized_name,
             description=description,
             verify_status="未校核",
             created_by=current_admin.id,
@@ -196,6 +216,7 @@ def verify_dataset(
     dataset = db.query(Dataset).filter(Dataset.id == dataset_id).first()
     if not dataset:
         raise HTTPException(status_code=404, detail="数据集不存在")
+    _ensure_allowed_dataset(dataset)
     
     # 获取该数据集的记录
     uploaded_records = db.query(DatasetRecord).filter(
@@ -206,6 +227,13 @@ def verify_dataset(
         raise HTTPException(status_code=400, detail="数据集没有记录，无法校核")
     
     # 获取基础数据
+    is_compliant, compliance_reason = check_dataset_political_compliance(dataset, uploaded_records)
+    if not is_compliant:
+        dataset.verify_status = "校核失败"
+        db.commit()
+        db.refresh(dataset)
+        raise HTTPException(status_code=400, detail=f"政治内容校核不通过: {compliance_reason}")
+
     base_records = db.query(BasePriceData).order_by(BasePriceData.record_time).all()
     
     if not base_records:
@@ -255,6 +283,7 @@ def get_dataset(
     dataset = db.query(Dataset).filter(Dataset.id == dataset_id).first()
     if not dataset:
         raise HTTPException(status_code=404, detail="Dataset not found")
+    _ensure_allowed_dataset(dataset)
     return dataset
 
 
@@ -268,6 +297,7 @@ def download_dataset(
     dataset = db.query(Dataset).filter(Dataset.id == dataset_id).first()
     if not dataset:
         raise HTTPException(status_code=404, detail="数据集不存在")
+    _ensure_allowed_dataset(dataset)
     
     # 获取关联的文件
     db_file = db.query(DatasetFile).filter(DatasetFile.dataset_id == dataset_id).first()
@@ -290,7 +320,8 @@ def update_dataset(
     dataset = db.query(Dataset).filter(Dataset.id == dataset_id).first()
     if not dataset:
         raise HTTPException(status_code=404, detail="Dataset not found")
-    dataset.name = payload.name
+    _ensure_allowed_dataset(dataset)
+    dataset.name = _ensure_allowed_dataset_name(payload.name)
     dataset.description = payload.description
     db.add(dataset)
     db.commit()
@@ -307,6 +338,7 @@ def delete_dataset(
     dataset = db.query(Dataset).filter(Dataset.id == dataset_id).first()
     if not dataset:
         raise HTTPException(status_code=404, detail="Dataset not found")
+    _ensure_allowed_dataset(dataset)
     
     # 删除关联的文件
     db_files = db.query(DatasetFile).filter(DatasetFile.dataset_id == dataset_id).all()
@@ -351,7 +383,7 @@ def upload_csv_dataset(
         raise HTTPException(status_code=400, detail=error_msg)
     
     # 检查是否存在同名数据集
-    existing = db.query(Dataset).filter(Dataset.name == name).first()
+    existing = db.query(Dataset).filter(Dataset.name == normalized_name).first()
     
     if existing:
         if overwrite:
@@ -364,7 +396,7 @@ def upload_csv_dataset(
     else:
         # 创建新数据集
         dataset = Dataset(
-            name=name,
+            name=normalized_name,
             description=description,
             created_by=current_admin.id,
         )
@@ -476,3 +508,4 @@ def upload_csv_dataset(
     db.refresh(dataset)
     return dataset
 
+    normalized_name = _ensure_allowed_dataset_name(name)

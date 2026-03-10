@@ -12,7 +12,6 @@
         <div class="filter-group">
           <label>类型选择</label>
           <select class="input">
-            <option>周前确定</option>
             <option>周前概率</option>
           </select>
         </div>
