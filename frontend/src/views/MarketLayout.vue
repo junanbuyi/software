@@ -13,7 +13,7 @@
         <ul class="sidebar-nav">
           <li v-for="item in navItems" :key="item.key"
               :class="['nav-item', { active: isActive(item.path) || hasActiveChild(item) }]"
-              @click="toggleSubMenu(item.key)">
+              @click="handleNavClick(item)">
             <span class="nav-icon">{{ item.icon }}</span>
             <span>{{ item.label }}</span>
             <span v-if="item.children" class="nav-arrow" :class="{ rotated: openSubMenu === item.key }">▼</span>
@@ -71,6 +71,14 @@ const toggleSubMenu = (key: string) => {
     openSubMenu.value = null;
   } else {
     openSubMenu.value = key;
+  }
+};
+
+const handleNavClick = (item: any) => {
+  if (item.children) {
+    toggleSubMenu(item.key);
+  } else {
+    navigateTo(item.path);
   }
 };
 
