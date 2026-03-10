@@ -10,7 +10,9 @@ import MarketLayout from "../views/MarketLayout.vue";
 import CompanyInfoView from "../views/CompanyInfoView.vue";
 import DisclosureView from "../views/DisclosureView.vue";
 import TradingView from "../views/TradingView.vue";
-import SettlementView from "../views/SettlementView.vue";
+import SelfDeclareView from "../views/SelfDeclareView.vue";
+import RationalDeclareView from "../views/RationalDeclareView.vue";
+import CompareView from "../views/CompareView.vue";
 import ModelsView from "../views/ModelsView.vue";
 import PredictionsView from "../views/PredictionsView.vue";
 import PredictionDetailView from "../views/PredictionDetailView.vue";
@@ -36,7 +38,16 @@ const router = createRouter({
         { path: "company", name: "market-company", component: CompanyInfoView },
         { path: "disclosure", name: "market-disclosure", component: DisclosureView },
         { path: "trading", name: "market-trading", component: TradingView },
-        { path: "settlement", name: "market-settlement", component: SettlementView },
+        { 
+          path: "settlement", 
+          name: "market-settlement",
+          redirect: "/market/settlement/self",
+          children: [
+            { path: "self", name: "market-settlement-self", component: SelfDeclareView },
+            { path: "rational", name: "market-settlement-rational", component: RationalDeclareView },
+            { path: "compare", name: "market-settlement-compare", component: CompareView },
+          ]
+        },
       ]
     },
     { path: "/account", name: "account", component: AccountView },

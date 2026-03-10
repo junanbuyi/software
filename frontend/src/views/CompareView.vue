@@ -131,36 +131,7 @@
         </div>
       </div>
 
-      <!-- 电力电量平衡表单图 -->
-      <div class="card" style="margin-top: 20px;">
-        <h3 class="card-title">电力电量平衡结果</h3>
-        <div class="svg-chart-wrap" style="height: 260px;">
-          <svg viewBox="0 0 700 260" class="svg-chart">
-            <line x1="50" y1="10" x2="50" y2="230" stroke="#e0e0e0" stroke-width="1"/>
-            <line x1="50" y1="230" x2="690" y2="230" stroke="#e0e0e0" stroke-width="1"/>
-            <text x="50" y="10" font-size="10" fill="#666" text-anchor="middle">功率(MW)</text>
-            <text v-for="(v, i) in balanceYLabels" :key="i" :x="46" :y="230 - (i/3)*210 + 4" text-anchor="end" font-size="10" fill="#999">{{ v }}</text>
-            <polygon :points="balanceAreaPoints" fill="rgba(255,72,72,0.8)" stroke="none"/>
-            <polygon :points="windAreaPoints" fill="rgba(76,175,80,0.8)" stroke="none"/>
-            <polygon :points="solarAreaPoints" fill="rgba(255,215,0.8)" stroke="none"/>
-            <polygon :points="hydroAreaPoints" fill="rgba(24,144,255,0.8)" stroke="none"/>
-            <polyline :points="loadLinePoints" fill="none" stroke="#333" stroke-width="2"/>
-            
-            <!-- X轴刻度和标签（适配96时段） -->
-            <template v-for="i in maxPeriods" :key="'x-balance-'+i">
-              <text v-if="i % 8 === 0" :x="50 + (i - 0.5) * 6.67" y="250" text-anchor="middle" font-size="9" fill="#666">{{ i }}</text>
-              <line :x1="50 + i * 6.67" :y1="230" :x2="50 + i * 6.67" :y2="235" stroke="#e0e0e0" stroke-width="1"/>
-            </template>
-          </svg>
-        </div>
-        <div class="legend-row">
-          <span class="legend-item"><span class="legend-color" style="background:rgba(255,72,72,0.8)"></span>火电功率</span>
-          <span class="legend-item"><span class="legend-color" style="background:rgba(76,175,80,0.8)"></span>风电功率</span>
-          <span class="legend-item"><span class="legend-color" style="background:rgba(255,215,0.8)"></span>光伏功率</span>
-          <span class="legend-item"><span class="legend-color" style="background:rgba(24,144,255,0.8)"></span>水电功率</span>
-          <span class="legend-item"><span class="legend-color" style="background:#333"></span>总负荷功率</span>
-        </div>
-      </div>
+
 
       <!-- 出清电价图表 -->
       <div class="card" style="margin-top: 20px;">
@@ -181,6 +152,8 @@
           </svg>
         </div>
       </div>
+
+
     </div>
 
     <!-- 详情分析 -->
@@ -235,40 +208,17 @@
       <!-- 自主报价结果 -->
       <div class="card" style="margin-top: 20px; overflow: visible;">
         
-        <div><!--
-          <h4>{{ currentDayLabel }} 机组中标结果</h4>
-          <p class="note">中标出力单位为MW，中标均价单位为元/MWh</p>
-          <div class="data-table-wrap">
-            <table class="data-table">
-              <thead>
-                <tr>
-                  <th>机组编号</th>
-                  <th>类型</th>
-                  <th v-for="i in Math.min(historyEnergyDetail[0]?.values?.length || 0, 6)" :key="i">时段{{ i }}</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-for="row in historyEnergyDetail.slice(0, 8)" :key="row.row_index">
-                  <td>Thermal_{{ Number(row.row_index) + 1 }}</td>
-                  <td>中标出力</td>
-                  <td v-for="(v, i) in row.values.slice(0, 6)" :key="i">{{ typeof v === 'number' ? v.toFixed(2) : v }}</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        -->
+        <div>
           
           
-          <!-- 新增：机组中标出力柱状图 -->
-          <div class="bar-chart-container" style="margin-top: 20px; overflow: visible;">
-            <!-- 标题+下拉选择框 -->
+          <!-- 中标出力与均价折线图 -->
+          <div class="card" style="margin-top: 20px;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-              <h5 style="font-size: 13px; color: #333; margin: 0;">各时段机组中标结果</h5>
-              <!-- 机组选择下拉框 - 修复disabled绑定 -->
+              <h3 class="card-title" style="margin: 0;">中标出力与均价</h3>
               <select 
                 v-model="selectedUnitIndex" 
                 style="padding: 4px 8px; border: 1px solid #d9d9d9; border-radius: 4px; font-size: 12px; color: #333;"
-                :disabled="!historyEnergyDetail.length"  <!-- 修复：使用v-bind绑定布尔值 -->
+                :disabled="!historyEnergyDetail.length"
               >
                 <option 
                   v-for="(row, idx) in historyEnergyDetail.slice(0, 8)" 
@@ -279,141 +229,55 @@
                 </option>
               </select>
             </div>
-
-
-            <div class="svg-chart-wrap" style="height: 300px; overflow: visible;">
-              <svg :viewBox="`0 0 ${Math.max(800, 60 + maxPeriods * 8 + 60)} 300`" class="svg-chart bar-chart" style="width: 100%; min-width: 800px;">
-                <!-- 坐标轴 -->
-                <line x1="60" y1="20" x2="60" y2="270" stroke="#e0e0e0" stroke-width="1"/>
-                <line x1="60" y1="270" :x2="60 + maxPeriods * 8 + 20" y2="270" stroke="#e0e0e0" stroke-width="1"/>
-                <!-- 右侧Y轴 - 中标均价 -->
-                <line :x1="60 + maxPeriods * 8 + 20" y1="20" :x2="60 + maxPeriods * 8 + 20" y2="270" stroke="#e0e0e0" stroke-width="1"/>
-                
-                <!-- Y轴刻度和标签 -->
-                <!-- 出力(MW) 标签放在坐标轴上方 -->
-                <text x="60" y="10" font-size="10" fill="#666" text-anchor="middle">出力(MW)</text>
-                <template v-for="(v, i) in barYLabels" :key="'y-'+i">
-                  <text :x="55" :y="270 - (i / (barYLabels.length - 1)) * 240 + 4" text-anchor="end" font-size="10" fill="#999">{{ v }}</text>
-                  <line :x1="58" :y1="270 - (i / (barYLabels.length - 1)) * 240" :x2="60 + maxPeriods * 8 + 20" :y2="270 - (i / (barYLabels.length - 1)) * 240" stroke="#f0f0f0" stroke-width="1"/>
-                </template>
-                
-                <!-- 右侧Y轴 - 中标均价刻度和标签 -->
-                <!-- 中标均价(元/MWh) 标签放在坐标轴上方 -->
-                <text :x="60 + maxPeriods * 8 + 20" y="10" font-size="10" fill="#666" text-anchor="middle">中标均价(元/MWh)</text>
-                <template v-for="(v, i) in priceYLabels" :key="'y-price-'+i">
-                  <text :x="60 + maxPeriods * 8 + 25" :y="270 - (i / (priceYLabels.length - 1)) * 240 + 4" text-anchor="start" font-size="10" fill="#999">{{ v }}</text>
-                </template>
-                
-                <!-- X轴刻度和标签（适配96时段） -->
-                <template v-for="i in maxPeriods" :key="'x-'+i">
-                  <text v-if="i % 8 === 0" :x="60 + (i - 0.5) * 8" y="285" text-anchor="middle" font-size="9" fill="#666">{{ i }}</text>
-                  <line :x1="60 + i * 8" :y1="270" :x2="60 + i * 8" :y2="275" stroke="#e0e0e0" stroke-width="1"/>
-                </template>
-                
-                <!-- 选中机组的柱状图 -->
-                <template v-if="selectedUnitData">
-                  <rect 
-                    v-for="(value, periodIdx) in selectedUnitData.values" 
-                    :key="'bar-'+selectedUnitIndex+'-'+periodIdx"
-                    :x="60 + periodIdx * 8 + 1"
-                    :y="getBarY(value)" 
-                    width="6"
-                    :height="getBarHeight(value)" 
-                    fill="#1890ff"
-                    opacity="0.8"
-                  >
-                    <title>
-                      机组{{ Number(selectedUnitData.row_index) + 1 }} 时段{{ Number(periodIdx) + 1 }}: 
-                      {{ typeof value === 'number' ? value.toFixed(2) : '0.00' }} MW
-                    </title>
-                  </rect>
-                </template>
-                
-                <!-- 中标均价曲线 -->
-                <polyline 
-                  v-if="priceLinePath" 
-                  :points="priceLinePath" 
-                  fill="none" 
-                  stroke="#faad14" 
-                  stroke-width="2"
-                >
-                  <title>中标均价(元/MWh)</title>
-                </polyline>
-                
-                <!-- 图例（居中显示：中标出力、中标均价） -->
-                <g :transform="`translate(${60 + (maxPeriods * 8) / 2 - 100}, 10)`">
-                  <template v-if="selectedUnitData">
-                    <!-- 中标出力图例 -->
-                    <rect 
-                      x="0" y="0" width="12" height="8" 
-                      fill="#1890ff" opacity="0.8"
-                    />
-                    <text x="16" y="8" font-size="10" fill="#666">中标出力</text>
-                    
-                    <!-- 中标均价图例 -->
-                    <line x1="80" y1="4" x2="100" y2="4" stroke="#faad14" stroke-width="2"/>
-                    <text x="105" y="8" font-size="10" fill="#666">中标均价</text>
-                  </template>
+            <div class="svg-chart-wrap">
+              <svg viewBox="0 0 700 220" class="svg-chart">
+                <!-- 左侧Y轴 -->
+                <line x1="50" y1="10" x2="50" y2="200" stroke="#e0e0e0" stroke-width="1"/>
+                <!-- 右侧Y轴（副坐标轴） -->
+                <line x1="690" y1="10" x2="690" y2="200" stroke="#e0e0e0" stroke-width="1"/>
+                <!-- X轴 -->
+                <line x1="50" y1="200" x2="690" y2="200" stroke="#e0e0e0" stroke-width="1"/>
+                <!-- 左侧Y轴标签（出力） -->
+                <text x="50" y="10" font-size="10" fill="#1890ff" text-anchor="middle">出力(MW)</text>
+                <text v-for="(v, i) in barYLabels.slice(0, 4)" :key="'left-'+i" :x="45" :y="200 - i * 60 + 4" text-anchor="end" font-size="11" fill="#1890ff">{{ v }}</text>
+                <!-- 右侧Y轴标签（均价） -->
+                <text x="690" y="10" font-size="10" fill="#faad14" text-anchor="middle">均价(元/MWh)</text>
+                <text v-for="(v, i) in priceYLabels.slice(0, 4)" :key="'right-'+i" :x="695" :y="200 - i * 60 + 4" text-anchor="start" font-size="11" fill="#faad14">{{ v }}</text>
+                <!-- 中标出力折线 -->
+                <polyline v-if="outputLinePath" :points="outputLinePath" fill="none" stroke="#1890ff" stroke-width="2"/>
+                <!-- 中标均价折线（副坐标轴） -->
+                <polyline v-if="priceLinePathDual" :points="priceLinePathDual" fill="none" stroke="#faad14" stroke-width="2"/>
+                <!-- 图例 -->
+                <g transform="translate(300, 10)">
+                  <line x1="0" y1="4" x2="20" y2="4" stroke="#1890ff" stroke-width="2"/>
+                  <text x="25" y="8" font-size="10" fill="#666">中标出力</text>
+                  <line x1="80" y1="4" x2="100" y2="4" stroke="#faad14" stroke-width="2"/>
+                  <text x="105" y="8" font-size="10" fill="#666">中标均价</text>
                 </g>
+                
+                <template v-for="i in maxPeriods" :key="'x-output-'+i">
+                  <text v-if="i % 8 === 0" :x="50 + (i - 0.5) * 6.67" y="218" text-anchor="middle" font-size="9" fill="#666">{{ i }}</text>
+                  <line :x1="50 + i * 6.67" :y1="200" :x2="50 + i * 6.67" :y2="205" stroke="#e0e0e0" stroke-width="1"/>
+                </template>
               </svg>
             </div>
           </div>
-          
-          <!-- 新增：中标收益柱状图 -->
-          <div class="bar-chart-container" style="margin-top: 30px;">
-            <!-- 标题 -->
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-              <h5 style="font-size: 13px; color: #333; margin: 0;">各时段机组中标收益</h5>
-            </div>
 
-            <div class="svg-chart-wrap" style="height: 300px; overflow: visible;">
-              <svg :viewBox="`0 0 ${Math.max(800, 60 + maxPeriods * 8 + 60)} 300`" class="svg-chart bar-chart" style="width: 100%; min-width: 800px;">
-                <!-- 坐标轴 -->
-                <line x1="60" y1="20" x2="60" y2="270" stroke="#e0e0e0" stroke-width="1"/>
-                <line x1="60" y1="270" :x2="60 + maxPeriods * 8 + 20" y2="270" stroke="#e0e0e0" stroke-width="1"/>
+          <!-- 中标收益折线图 -->
+          <div class="card" style="margin-top: 20px;">
+            <h3 class="card-title">中标收益</h3>
+            <div class="svg-chart-wrap">
+              <svg viewBox="0 0 700 220" class="svg-chart">
+                <line x1="50" y1="10" x2="50" y2="200" stroke="#e0e0e0" stroke-width="1"/>
+                <line x1="50" y1="200" x2="690" y2="200" stroke="#e0e0e0" stroke-width="1"/>
+                <text x="50" y="10" font-size="10" fill="#666" text-anchor="middle">收益(元)</text>
+                <text v-for="(v, i) in revenueYLabels.slice(0, 4)" :key="i" :x="45" :y="200 - i * 60 + 4" text-anchor="end" font-size="11" fill="#999">{{ v }}</text>
+                <polyline v-if="revenueLinePath" :points="revenueLinePath" fill="none" stroke="#52c41a" stroke-width="2"/>
                 
-                <!-- Y轴刻度和标签 -->
-                <!-- 中标收益(元) 标签放在坐标轴上方 -->
-                <text x="60" y="10" font-size="10" fill="#666" text-anchor="middle">中标收益(元)</text>
-                <template v-for="(v, i) in revenueYLabels" :key="'y-revenue-'+i">
-                  <text :x="55" :y="270 - (i / (revenueYLabels.length - 1)) * 240 + 4" text-anchor="end" font-size="10" fill="#999">{{ v }}</text>
-                  <line :x1="58" :y1="270 - (i / (revenueYLabels.length - 1)) * 240" :x2="60 + maxPeriods * 8 + 20" :y2="270 - (i / (revenueYLabels.length - 1)) * 240" stroke="#f0f0f0" stroke-width="1"/>
-                </template>
-                
-                <!-- X轴刻度和标签（适配96时段） -->
                 <template v-for="i in maxPeriods" :key="'x-revenue-'+i">
-                  <text v-if="i % 8 === 0" :x="60 + (i - 0.5) * 8" y="285" text-anchor="middle" font-size="9" fill="#666">{{ i }}</text>
-                  <line :x1="60 + i * 8" :y1="270" :x2="60 + i * 8" :y2="275" stroke="#e0e0e0" stroke-width="1"/>
+                  <text v-if="i % 8 === 0" :x="50 + (i - 0.5) * 6.67" y="218" text-anchor="middle" font-size="9" fill="#666">{{ i }}</text>
+                  <line :x1="50 + i * 6.67" :y1="200" :x2="50 + i * 6.67" :y2="205" stroke="#e0e0e0" stroke-width="1"/>
                 </template>
-                
-                <!-- 中标收益柱状图 -->
-                <template v-if="revenueData.length > 0">
-                  <rect 
-                    v-for="(value, periodIdx) in revenueData" 
-                    :key="'revenue-bar-'+periodIdx"
-                    :x="60 + periodIdx * 8 + 1"
-                    :y="getRevenueY(value)" 
-                    width="6"
-                    :height="getRevenueBarHeight(value)" 
-                    fill="#52c41a"
-                    opacity="0.8"
-                  >
-                    <title>
-                      时段{{ Number(periodIdx) + 1 }}: {{ typeof value === 'number' ? value.toFixed(2) : '0.00' }} 元
-                    </title>
-                  </rect>
-                </template>
-                
-                <!-- 图例（居中显示：中标收益） -->
-                <g :transform="`translate(${60 + (maxPeriods * 8) / 2 - 40}, 10)`">
-                  <template v-if="selectedUnitData">
-                    <rect 
-                      x="0" y="0" width="12" height="8" 
-                      fill="#52c41a" opacity="0.8"
-                    />
-                    <text x="16" y="8" font-size="10" fill="#666">中标收益</text>
-                  </template>
-                </g>
               </svg>
             </div>
           </div>
@@ -438,14 +302,7 @@ interface DateTab {
   label: string;
 }
 
-interface BalanceChartData {
-  thermal: number[];
-  wind: number[];
-  solar: number[];
-  hydro: number[];
-  load: number[];
-  periods: number;
-}
+
 
 // 柱状图颜色配置
 const barColors = [
@@ -484,22 +341,6 @@ const selectedUnitData = computed((): HistoryEnergyItem | null => {
   return historyEnergyDetail.value.slice(0, 8)[selectedUnitIndex.value] || null;
 });
 
-// 获取柱状图Y坐标
-const getBarY = (value: any): number => {
-  const val = Number(value) || 0;
-  const maxVal = Number(maxOutput.value) || 1;
-  // 最小高度1px，避免完全不可见
-  return 270 - Math.max((val / maxVal) * 240, 1);
-};
-
-// 获取柱状图高度
-const getBarHeight = (value: any): number => {
-  const val = Number(value) || 0;
-  const maxVal = Number(maxOutput.value) || 1;
-  // 最小高度1px
-  return Math.max((val / maxVal) * 240, 1);
-};
-
 // 中标均价（电能量市场出清电价）相关计算
 const maxPrice = computed<number>(() => {
   if (!energyPriceData.value.length) return 1000;
@@ -517,20 +358,37 @@ const priceYLabels = computed<number[]>(() => {
   return [0, Math.round(max / 4), Math.round(max / 2), Math.round(max * 3 / 4), max];
 });
 
-// 获取中标均价Y坐标
-const getPriceY = (value: any): number => {
-  const val = Number(value) || 0;
-  const maxVal = Number(maxPrice.value) || 1000;
-  // 最小高度1px
-  return 270 - Math.max((val / maxVal) * 240, 1);
-};
-
-// 中标均价曲线路径
-const priceLinePath = computed<string>(() => {
+// 中标均价副坐标轴路径（与出力共用X轴，但使用右侧Y轴比例）
+const priceLinePathDual = computed<string>(() => {
   if (!energyPriceData.value.length) return "";
+  const maxVal = maxPrice.value || 1;
   const points = energyPriceData.value.map((value, idx) => {
-    const x = 60 + idx * 8 + 3; // 居中在柱子上
-    const y = getPriceY(value);
+    const x = 50 + idx * 6.67;
+    const y = 200 - (Number(value) / maxVal) * 180;
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  });
+  return points.join(" ");
+});
+
+// 中标出力折线路径
+const outputLinePath = computed<string>(() => {
+  if (!selectedUnitData.value || !selectedUnitData.value.values.length) return "";
+  const maxVal = maxOutput.value || 1;
+  const points = selectedUnitData.value.values.map((value: any, idx: number) => {
+    const x = 50 + idx * 6.67;
+    const y = 200 - (Number(value) / maxVal) * 180;
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  });
+  return points.join(" ");
+});
+
+// 中标收益折线路径
+const revenueLinePath = computed<string>(() => {
+  if (!revenueData.value.length) return "";
+  const maxVal = maxRevenue.value || 1;
+  const points = revenueData.value.map((value, idx) => {
+    const x = 50 + idx * 6.67;
+    const y = 200 - (Number(value) / maxVal) * 180;
     return `${x.toFixed(1)},${y.toFixed(1)}`;
   });
   return points.join(" ");
@@ -549,8 +407,13 @@ const revenueData = computed<number[]>(() => {
 });
 
 const maxRevenue = computed<number>(() => {
-  // 固定最大值为2000
-  return 2000;
+  if (!revenueData.value.length) return 1000;
+  let max = 1000;
+  revenueData.value.forEach((v) => {
+    const numVal = Number(v);
+    if (!isNaN(numVal) && numVal > max) max = numVal;
+  });
+  return Math.ceil(max / 100) * 100;
 });
 
 // 中标收益Y轴刻度标签
@@ -558,132 +421,6 @@ const revenueYLabels = computed<number[]>(() => {
   const max = maxRevenue.value;
   return [0, Math.round(max / 4), Math.round(max / 2), Math.round(max * 3 / 4), max];
 });
-
-// 获取中标收益Y坐标
-const getRevenueY = (value: number): number => {
-  const val = Number(value) || 0;
-  const maxVal = Number(maxRevenue.value) || 100000;
-  // 最小高度1px
-  return 270 - Math.max((val / maxVal) * 240, 1);
-};
-
-// 获取中标收益柱状图高度
-const getRevenueBarHeight = (value: number): number => {
-  const val = Number(value) || 0;
-  const maxVal = Number(maxRevenue.value) || 100000;
-  // 最小高度1px
-  return Math.max((val / maxVal) * 240, 1);
-};
-
-// 日期标签配置
-const dateTabs: DateTab[] = [
-  { key: 1, label: "第一天" },
-  { key: 2, label: "第二天" },
-  { key: 3, label: "第三天" },
-  { key: 4, label: "第四天" },
-  { key: 5, label: "第五天" },
-  { key: 6, label: "第六天" },
-  { key: 7, label: "第七天" }
-];
-
-// 核心状态
-const settlementTab = ref<string>("overview");
-const currentDay = ref<number>(1);
-const overviewData = ref<any>({ energy_market: {} });
-const settlementRows = ref<any[]>([]);
-const g13SettlementData = ref<any>(null);
-const historyEnergyDetail = ref<HistoryEnergyItem[]>([]); // 修复：指定具体类型
-const balanceChart = ref<BalanceChartData>({ thermal: [], wind: [], solar: [], hydro: [], load: [], periods: 96 });
-const energyPriceData = ref<number[]>([]);
-
-// 当前日期标签文本
-const currentDayLabel = computed(() => {
-  const dayItem = dateTabs.find(item => item.key === currentDay.value);
-  return dayItem?.label || "第一天";
-});
-
-// Tab切换处理
-const handleTabChange = (tabKey: string) => {
-  settlementTab.value = tabKey;
-  refreshAllData();
-};
-
-// 日期切换处理
-const handleDayChange = (dayKey: number) => {
-  currentDay.value = dayKey;
-  refreshAllData();
-};
-
-// 数据刷新统一入口
-const refreshAllData = () => {
-  console.log(`刷新数据：${currentDayLabel.value} - ${settlementTab.value === 'overview' ? '市场总览' : '详情分析'}`);
-  fetchSettlementData();
-  fetchHistoryDetail();
-  fetchBalanceChart();
-  fetchEnergyPriceChart();
-};
-
-// 获取结算数据
-async function fetchSettlementData() {
-  try {
-    const [ov, dt] = await Promise.all([
-      marketApi.getSettlementOverview(),
-      marketApi.getSettlementDetail(),
-    ]);
-    overviewData.value = ov.data;
-    settlementRows.value = dt.data.energy_rows || [];
-    g13SettlementData.value = settlementRows.value.find((row: any) => row.name === "G13") || null;
-  } catch (e) { 
-    console.error("获取结算数据失败", e); 
-  }
-}
-
-// 获取历史详情数据（添加兜底测试数据）
-async function fetchHistoryDetail() {
-  try {
-    const res = await marketApi.getOutResults({ sheet: "thermal_tg_opera_power" });
-    const rawItems = res.data?.items || [];
-    // 过滤有效数据 - 修复：指定item类型
-    historyEnergyDetail.value = rawItems.filter((item: HistoryEnergyItem) => 
-      Array.isArray(item?.values) && item.values.length > 0
-    );
-    // 兜底：无数据时生成测试数据（8个机组，96时段）
-    if (historyEnergyDetail.value.length === 0) {
-      historyEnergyDetail.value = Array.from({ length: 8 }, (_, idx) => ({
-        row_index: idx,
-        values: Array.from({ length: 96 }, () => Math.floor(Math.random() * 200) + 50)
-      }));
-    }
-  } catch (e) { 
-    console.error("获取历史详情失败", e);
-    // 报错时生成测试数据
-    historyEnergyDetail.value = Array.from({ length: 8 }, (_, idx) => ({
-      row_index: idx,
-      values: Array.from({ length: 96 }, () => Math.floor(Math.random() * 200) + 50)
-    }));
-  }
-}
-
-// 获取平衡图表数据
-async function fetchBalanceChart() {
-  try {
-    const { data } = await marketApi.getBalanceChart();
-    balanceChart.value = data;
-  } catch (e) { 
-    console.error("获取平衡图表失败", e); 
-  }
-}
-
-// 获取出清电价数据
-async function fetchEnergyPriceChart() {
-  try {
-    const { data } = await marketApi.getOutResults({ sheet: "energy_price", row_index: 0 });
-    const items = data.items || [];
-    energyPriceData.value = items.length > 0 ? items[0].values : [];
-  } catch (e) { 
-    console.error("获取出清电价失败", e); 
-  }
-}
 
 // 饼状图数据
 const pieColors = ["rgba(76,175,80,0.8)", "rgba(255,215,0.8)", "rgba(24,144,255,0.8)", "rgba(255,72,72,0.8)", "rgba(114,46,209,0.8)"];
@@ -752,86 +489,7 @@ const countArcs = computed(() => pieArcs(countPieData.value));
 // 装机容量饼图
 const capacityArcs = computed(() => pieArcs(capacityPieData.value));
 
-// 平衡图表最大Y值
-const balanceMaxY = computed(() => {
-  const all = [
-    ...balanceChart.value.thermal,
-    ...balanceChart.value.load,
-    ...(balanceChart.value.thermal.map((v: number, i: number) => v + (balanceChart.value.wind[i] || 0) + (balanceChart.value.solar[i] || 0) + (balanceChart.value.hydro[i] || 0))),
-  ];
-  return Math.max(...all, 1);
-});
 
-// 平衡图表Y坐标转换
-const toBalanceY = (v: number) => {
-  const max = balanceMaxY.value;
-  return 230 - (v / max) * 210;
-};
-
-// 火电区域坐标
-const balanceAreaPoints = computed(() => {
-  const data = balanceChart.value.thermal;
-  if (!data.length) return "";
-  const n = data.length;
-  const step = 640 / (n - 1);
-  const top = data.map((v: number, i: number) => `${(50 + i * step).toFixed(1)},${toBalanceY(v).toFixed(1)}`);
-  const bottom = `${(50 + (n - 1) * step).toFixed(1)},${toBalanceY(0)} 50,${toBalanceY(0)}`;
-  return top.join(" ") + " " + bottom;
-});
-
-// 风电区域坐标
-const windAreaPoints = computed(() => {
-  const thermal = balanceChart.value.thermal;
-  const wind = balanceChart.value.wind;
-  if (!thermal.length || !wind.length) return "";
-  const n = thermal.length;
-  const step = 640 / (n - 1);
-  const top = wind.map((_: number, i: number) => `${(50 + i * step).toFixed(1)},${toBalanceY(thermal[i] + wind[i]).toFixed(1)}`);
-  const bottom = thermal.map((v: number, i: number) => `${(50 + i * step).toFixed(1)},${toBalanceY(v).toFixed(1)}`).reverse();
-  return top.join(" ") + " " + bottom.join(" ");
-});
-
-// 光伏区域坐标
-const solarAreaPoints = computed(() => {
-  const thermal = balanceChart.value.thermal;
-  const wind = balanceChart.value.wind;
-  const solar = balanceChart.value.solar;
-  if (!thermal.length || !wind.length || !solar.length) return "";
-  const n = thermal.length;
-  const step = 640 / (n - 1);
-  const top = solar.map((_: number, i: number) => `${(50 + i * step).toFixed(1)},${toBalanceY(thermal[i] + wind[i] + solar[i]).toFixed(1)}`);
-  const bottom = wind.map((_: number, i: number) => `${(50 + i * step).toFixed(1)},${toBalanceY(thermal[i] + wind[i]).toFixed(1)}`).reverse();
-  return top.join(" ") + " " + bottom.join(" ");
-});
-
-// 水电区域坐标
-const hydroAreaPoints = computed(() => {
-  const thermal = balanceChart.value.thermal;
-  const wind = balanceChart.value.wind;
-  const solar = balanceChart.value.solar;
-  const hydro = balanceChart.value.hydro;
-  if (!thermal.length || !wind.length || !solar.length || !hydro.length) return "";
-  const n = thermal.length;
-  const step = 640 / (n - 1);
-  const top = hydro.map((_: number, i: number) => `${(50 + i * step).toFixed(1)},${toBalanceY(thermal[i] + wind[i] + solar[i] + hydro[i]).toFixed(1)}`);
-  const bottom = solar.map((_: number, i: number) => `${(50 + i * step).toFixed(1)},${toBalanceY(thermal[i] + wind[i] + solar[i]).toFixed(1)}`).reverse();
-  return top.join(" ") + " " + bottom.join(" ");
-});
-
-// 负荷线坐标
-const loadLinePoints = computed(() => {
-  const data = balanceChart.value.load;
-  if (!data.length) return "";
-  const n = data.length;
-  const step = 640 / (n - 1);
-  return data.map((v: number, i: number) => `${(50 + i * step).toFixed(1)},${toBalanceY(v).toFixed(1)}`).join(" ");
-});
-
-// 平衡图表Y轴标签
-const balanceYLabels = computed(() => {
-  const max = balanceMaxY.value;
-  return [0, Math.round(max / 3), Math.round(max * 2 / 3), Math.round(max)];
-});
 
 // 出清电价图表坐标
 const clearingChartPoints = computed(() => {
@@ -842,11 +500,111 @@ const clearingChartPoints = computed(() => {
   return vals.map((v, i) => `${(50 + i * step).toFixed(1)},${(200 - (v / maxVal) * 180).toFixed(1)}`).join(" ");
 });
 
+// 日期标签配置
+const dateTabs: DateTab[] = [
+  { key: 1, label: "第一天" },
+  { key: 2, label: "第二天" },
+  { key: 3, label: "第三天" },
+  { key: 4, label: "第四天" },
+  { key: 5, label: "第五天" },
+  { key: 6, label: "第六天" },
+  { key: 7, label: "第七天" }
+];
+
+// 核心状态
+const settlementTab = ref<string>("overview");
+const currentDay = ref<number>(1);
+const overviewData = ref<any>({ energy_market: {} });
+const settlementRows = ref<any[]>([]);
+const g13SettlementData = ref<any>(null);
+const historyEnergyDetail = ref<HistoryEnergyItem[]>([]); // 修复：指定具体类型
+
+const energyPriceData = ref<number[]>([]);
+
+// 当前日期标签文本
+const currentDayLabel = computed(() => {
+  const dayItem = dateTabs.find(item => item.key === currentDay.value);
+  return dayItem?.label || "第一天";
+});
+
+// Tab切换处理
+const handleTabChange = (tabKey: string) => {
+  settlementTab.value = tabKey;
+  refreshAllData();
+};
+
+// 日期切换处理
+const handleDayChange = (dayKey: number) => {
+  currentDay.value = dayKey;
+  refreshAllData();
+};
+
+// 数据刷新统一入口
+const refreshAllData = () => {
+  console.log(`刷新数据：${currentDayLabel.value} - ${settlementTab.value === 'overview' ? '市场总览' : '详情分析'}`);
+  fetchSettlementData();
+  fetchHistoryDetail();
+  fetchEnergyPriceChart();
+};
+
+// 获取结算数据
+async function fetchSettlementData() {
+  try {
+    const [ov, dt] = await Promise.all([
+      marketApi.getSettlementOverview(),
+      marketApi.getSettlementDetail(),
+    ]);
+    overviewData.value = ov.data;
+    settlementRows.value = dt.data.energy_rows || [];
+    g13SettlementData.value = settlementRows.value.find((row: any) => row.name === "G13") || null;
+  } catch (e) { 
+    console.error("获取结算数据失败", e); 
+  }
+}
+
+// 获取历史详情数据（添加兜底测试数据）
+async function fetchHistoryDetail() {
+  try {
+    const res = await marketApi.getOutResults({ sheet: "thermal_tg_opera_power" });
+    const rawItems = res.data?.items || [];
+    // 过滤有效数据 - 修复：指定item类型
+    historyEnergyDetail.value = rawItems.filter((item: HistoryEnergyItem) => 
+      Array.isArray(item?.values) && item.values.length > 0
+    );
+    // 兜底：无数据时生成测试数据（8个机组，96时段）
+    if (historyEnergyDetail.value.length === 0) {
+      historyEnergyDetail.value = Array.from({ length: 8 }, (_, idx) => ({
+        row_index: idx,
+        values: Array.from({ length: 96 }, () => Math.floor(Math.random() * 200) + 50)
+      }));
+    }
+  } catch (e) { 
+    console.error("获取历史详情失败", e);
+    // 报错时生成测试数据
+    historyEnergyDetail.value = Array.from({ length: 8 }, (_, idx) => ({
+      row_index: idx,
+      values: Array.from({ length: 96 }, () => Math.floor(Math.random() * 200) + 50)
+    }));
+  }
+}
+
+// 获取出清电价数据
+async function fetchEnergyPriceChart() {
+  try {
+    const { data } = await marketApi.getOutResults({ sheet: "energy_price", row_index: 0 });
+    const items = data.items || [];
+    energyPriceData.value = items.length > 0 ? items[0].values : [];
+  } catch (e) { 
+    console.error("获取出清电价失败", e); 
+  }
+}
+
+
+
 // 初始化数据
 onMounted(() => {
   fetchSettlementData();
   fetchHistoryDetail();
-  fetchBalanceChart();
   fetchEnergyPriceChart();
 });
 </script>
@@ -1080,7 +838,7 @@ onMounted(() => {
   width: 100%;
   height: 220px;
   position: relative;
-  overflow: auto;
+  overflow: hidden;
 }
 
 .svg-chart {
@@ -1096,7 +854,7 @@ onMounted(() => {
 
 /* 表格样式 */
 .data-table-wrap {
-  overflow-x: auto;
+  overflow-x: hidden;
   margin: 16px 0;
 }
 
@@ -1131,24 +889,10 @@ onMounted(() => {
   font-size: 14px;
 }
 
-/* 柱状图样式 */
-.bar-chart-container {
-  margin-top: 20px;
-}
-
-.bar-chart {
-  min-width: 4000px;
-  height: 100%;
-}
-
+/* 适配96时段柱状图容器 */
 .note {
   font-size: 12px;
   color: #999;
   margin: 0 0 8px;
-}
-
-/* 适配96时段柱状图容器 */
-.bar-chart-container .svg-chart-wrap {
-  height: 300px !important;
 }
 </style>

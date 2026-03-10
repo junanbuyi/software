@@ -12,10 +12,21 @@
         <div class="sidebar-title">功能模块</div>
         <ul class="sidebar-nav">
           <li v-for="item in navItems" :key="item.key"
-              :class="['nav-item', { active: isActive(item.path) }]"
-              @click="navigateTo(item.path)">
+              :class="['nav-item', { active: isActive(item.path) || hasActiveChild(item) }]"
+              @click="toggleSubMenu(item.key)">
             <span class="nav-icon">{{ item.icon }}</span>
             <span>{{ item.label }}</span>
+            <span v-if="item.children" class="nav-arrow" :class="{ rotated: openSubMenu === item.key }">▼</span>
+          </li>
+          <!-- 子菜单 -->
+          <li v-if="openSubMenu === 'settlement'" class="sub-menu">
+            <ul>
+              <li v-for="child in getSubMenu('settlement')" :key="child.key"
+                  :class="['sub-nav-item', { active: isActive(child.path) }]"
+                  @click.stop="navigateTo(child.path)">
+                <span>{{ child.label }}</span>
+              </li>
+            </ul>
           </li>
         </ul>
       </aside>
@@ -29,10 +40,12 @@
 </template>
 
 <script setup lang="ts">
+import { ref, computed } from "vue";
 import { useRouter, useRoute } from "vue-router";
 
 const router = useRouter();
 const route = useRoute();
+const openSubMenu = ref<string | null>(null);
 
 const goBack = () => router.push("/functions");
 
@@ -40,8 +53,31 @@ const navItems = [
   { key: "company", label: "企业信息", icon: "≡", path: "/market/company" },
   { key: "disclosure", label: "信息披露", icon: "📊", path: "/market/disclosure" },
   { key: "trading", label: "市场交易", icon: "⚙", path: "/market/trading" },
-  { key: "settlement", label: "结算报告", icon: "💰", path: "/market/settlement" },
+  { 
+    key: "settlement", 
+    label: "结算报告", 
+    icon: "💰", 
+    path: "/market/settlement",
+    children: [
+      { key: "self-declare", label: "自主申报", path: "/market/settlement/self" },
+      { key: "rational-declare", label: "理性申报", path: "/market/settlement/rational" },
+      { key: "compare", label: "结果对比", path: "/market/settlement/compare" }
+    ]
+  },
 ];
+
+const toggleSubMenu = (key: string) => {
+  if (openSubMenu.value === key) {
+    openSubMenu.value = null;
+  } else {
+    openSubMenu.value = key;
+  }
+};
+
+const getSubMenu = (key: string) => {
+  const item = navItems.find(item => item.key === key);
+  return item?.children || [];
+};
 
 const navigateTo = (path: string) => {
   router.push(path);
@@ -50,7 +86,52 @@ const navigateTo = (path: string) => {
 const isActive = (path: string) => {
   return route.path === path;
 };
+
+const hasActiveChild = (item: any) => {
+  if (!item.children) return false;
+  return item.children.some((child: any) => isActive(child.path));
+};
 </script>
+
+<style scoped>
+/* 子菜单样式 */
+.sub-menu {
+  background: #f5f7fa;
+  margin: 0 12px;
+  border-radius: 4px;
+  overflow: hidden;
+  margin-bottom: 8px;
+}
+
+.sub-nav-item {
+  padding: 8px 16px 8px 36px;
+  cursor: pointer;
+  font-size: 13px;
+  color: #333;
+  transition: all 0.2s;
+}
+
+.sub-nav-item:hover {
+  background: rgba(24, 144, 255, 0.1);
+}
+
+.sub-nav-item.active {
+  color: #1890ff;
+  background: rgba(24, 144, 255, 0.1);
+  font-weight: 600;
+}
+
+/* 导航箭头样式 */
+.nav-arrow {
+  margin-left: auto;
+  font-size: 10px;
+  transition: transform 0.2s;
+}
+
+.nav-arrow.rotated {
+  transform: rotate(180deg);
+}
+</style>
 
 <style scoped>
 .market-page {
@@ -80,7 +161,7 @@ const isActive = (path: string) => {
 }
 .market-layout {
   display: grid;
-  grid-template-columns: 160px 1fr;
+  grid-template-columns: 180px 1fr;
   gap: 0;
   flex: 1;
 }
