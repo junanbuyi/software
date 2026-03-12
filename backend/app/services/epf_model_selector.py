@@ -17,6 +17,14 @@ EPF_MODEL_CONFIG = {
     "Ensemble": "Ensemble_week",
 }
 
+# Per-model results.json key mapping (folder-level runs)
+EPF_MODEL_RESULTS_KEY = {
+    "tcn": "TCN_week",
+    "mamba": "Mamba_week",
+    "nlinear": "NLinear_week",
+    "ensemble": "Ensemble_week",
+}
+
 METRIC_WEIGHTS = {
     "MAPE_150": 0.40,  # lower is better
     "MAE": 0.25,       # lower is better
@@ -85,6 +93,61 @@ def _latest_all_results_json() -> Path | None:
     if not candidates:
         return None
     return max(candidates, key=lambda p: p.stat().st_mtime)
+
+
+def _latest_model_results_json(model_key: str) -> Path | None:
+    root = _project_root() / "epf" / model_key / "results"
+    candidates = list(root.glob("**/results.json"))
+    if not candidates:
+        return None
+    return max(candidates, key=lambda p: p.stat().st_mtime)
+
+
+def _normalize_model_key(model_name: str) -> str | None:
+    name = model_name.lower()
+    if "ensemble" in name or "集成" in model_name or "闆嗘垚" in model_name:
+        return "ensemble"
+    if "mamba" in name:
+        return "mamba"
+    if "nlinear" in name:
+        return "nlinear"
+    if "tcn" in name:
+        return "tcn"
+    return None
+
+
+def load_epf_model_metrics(model_name: str) -> tuple[Dict[str, float], str]:
+    model_key = _normalize_model_key(model_name)
+    if not model_key:
+        raise ValueError(f"Unsupported EPF model name: {model_name}")
+
+    latest = _latest_model_results_json(model_key)
+    if latest is None:
+        raise ValueError(f"No EPF results JSON found for model: {model_name}")
+
+    data = _load_json(latest)
+    result_key = EPF_MODEL_RESULTS_KEY.get(model_key)
+    if not result_key:
+        raise ValueError(f"Unsupported EPF model key: {model_key}")
+
+    metric_block = data.get(result_key)
+    if not isinstance(metric_block, dict):
+        raise ValueError(f"Missing metrics '{result_key}' in {latest}")
+
+    metrics: Dict[str, float] = {}
+    for metric_name in METRIC_WEIGHTS:
+        value = metric_block.get(metric_name)
+        if isinstance(value, (int, float)):
+            metrics[metric_name] = float(value)
+
+    if set(metrics.keys()) != set(METRIC_WEIGHTS.keys()):
+        raise ValueError(f"Incomplete metrics in {latest} for {model_name}")
+
+    return metrics, str(latest)
+
+
+def score_epf_metrics(metrics: Dict[str, float]) -> float:
+    return round(_absolute_metric_score(metrics), 6)
 
 
 def _run_epf_retrain(timeout_seconds: int) -> tuple[bool, str]:

@@ -246,7 +246,17 @@ const filteredRankings = computed(() => {
 
       return datasetMatch && typeMatch && modelMatch && periodMatch && loadMatch && windMatch && weatherMatch;
     })
-    .sort((a, b) => Number(b.score) - Number(a.score));
+    .sort((a, b) => {
+      const order = ["tcn", "mamba", "nlinear", "ensemble", "集成"];
+      const aKey = order.findIndex(k => a.model.toLowerCase().includes(k));
+      const bKey = order.findIndex(k => b.model.toLowerCase().includes(k));
+      if (aKey !== -1 || bKey !== -1) {
+        if (aKey === -1) return 1;
+        if (bKey === -1) return -1;
+        if (aKey !== bKey) return aKey - bKey;
+      }
+      return Number(b.score) - Number(a.score);
+    });
 });
 
 const toggleFilter = (field: string) => {
@@ -282,7 +292,7 @@ const toRow = (item: RankingSummary, index: number): RankingRow => ({
   rmse: item.rmse.toFixed(2),
   r2: item.r2.toFixed(4),
   imape: item.imape.toFixed(4),
-  score: item.score.toFixed(4),
+  score: (item.score * 100).toFixed(2),
 });
 
 const loadRankings = async (allowFallback = false) => {
@@ -291,6 +301,7 @@ const loadRankings = async (allowFallback = false) => {
     const data = await fetchRankingSummary({
       start_time: toDateTime(queryStartDate.value, false),
       end_time: toDateTime(queryEndDate.value, true),
+      source: "epf",
     });
     rankings.value = data.map(toRow);
     if (

@@ -74,6 +74,18 @@ export const autoTrainEpfModels = async () => {
   return data;
 };
 
+export const seedEpfModels = async (datasetId?: number) => {
+  const { data } = await apiClient.post<{
+    dataset_id: number;
+    created: number;
+    existing: number;
+    items: { id: number; name: string }[];
+  }>("/models/seed-epf", null, {
+    params: datasetId ? { dataset_id: datasetId } : undefined,
+  });
+  return data;
+};
+
 export const uploadTrainedModelFile = async (modelName: string, file: File) => {
   const formData = new FormData();
   formData.append("model_name", modelName);

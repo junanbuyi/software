@@ -15,6 +15,8 @@ from app.models.base_price_data import BasePriceData
 from app.models.dataset_record import DatasetRecord
 from app.models.tcn_prediction import TcnProbPrediction
 from app.models.price_prediction import PricePrediction
+from app.models.model import Model as ModelEntity
+from app.services.epf_prob_service import filter_epf_prob_rows, load_epf_prob_rows
 
 router = APIRouter()
 
@@ -182,6 +184,59 @@ def get_tcn_probability_data(
             "qr_975": float(p.qr_975) if p.qr_975 else 0,
             "qr_995": float(p.qr_995) if p.qr_995 else 0,
             "load_kw": load_map.get(p.record_time, 0),
+        })
+
+    return {"items": items, "total": len(items)}
+
+
+@router.get("/epf-probability")
+def get_epf_probability_data(
+    model: Optional[str] = None,
+    model_id: Optional[int] = None,
+    start_time: Optional[datetime] = None,
+    end_time: Optional[datetime] = None,
+    db: Session = Depends(get_db),
+    _admin=Depends(get_current_admin),
+):
+    """Get EPF probability prediction data from local CSV results."""
+    model_name = model
+    if model_id is not None:
+        model_entity = db.query(ModelEntity).filter(ModelEntity.id == model_id).first()
+        if not model_entity:
+            return {"items": [], "total": 0}
+        model_name = model_entity.name
+    if not model_name:
+        return {"items": [], "total": 0}
+
+    rows, _ = load_epf_prob_rows(model_name, start_time=start_time, end_time=end_time, prefer_week=False)
+    if not rows:
+        return {"items": [], "total": 0}
+
+    times = [row["record_time"] for row in rows if isinstance(row.get("record_time"), datetime)]
+    load_map = {}
+    if times:
+        load_query = db.query(BasePriceData.record_time, BasePriceData.load_kw).filter(
+            BasePriceData.record_time.in_(times),
+        )
+        for r in load_query.all():
+            load_map[r.record_time] = float(r.load_kw) if r.load_kw else 0.0
+
+    items = []
+    for row in rows:
+        ts = row.get("record_time")
+        if not isinstance(ts, datetime):
+            continue
+        items.append({
+            "record_time": ts.isoformat(),
+            "real": float(row.get("real", 0.0)),
+            "qr_005": float(row.get("qr_005", 0.0)),
+            "qr_025": float(row.get("qr_025", 0.0)),
+            "qr_05": float(row.get("qr_05", 0.0)),
+            "qr_50": float(row.get("qr_50", 0.0)),
+            "qr_95": float(row.get("qr_95", 0.0)),
+            "qr_975": float(row.get("qr_975", 0.0)),
+            "qr_995": float(row.get("qr_995", 0.0)),
+            "load_kw": load_map.get(ts, 0.0),
         })
 
     return {"items": items, "total": len(items)}

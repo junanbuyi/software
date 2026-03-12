@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 import re
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 from pathlib import Path
 from typing import Optional
 
@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_current_admin
 from app.core.config import get_settings
 from app.db.deps import get_db
+from app.models.dataset import Dataset
 from app.models.model import Model
 from app.schemas.common import Paginated
 from app.schemas.model import (
@@ -22,11 +23,18 @@ from app.schemas.model import (
     ModelOut,
     ModelTrainResponse,
 )
-from app.services.epf_model_selector import select_best_epf_model
+from app.services.epf_model_selector import load_epf_model_metrics, score_epf_metrics, select_best_epf_model
 from app.services.storage_service import delete_file, save_upload_file
 from app.utils.pagination import paginate
 
 router = APIRouter(prefix="/models", tags=["models"])
+
+EPF_SEED_MODELS = [
+    ("TCN周前概率", "EPF TCN 概率预测"),
+    ("Mamba周前概率", "EPF Mamba 概率预测"),
+    ("NLinear周前概率", "EPF NLinear 概率预测"),
+    ("集成周前概率", "EPF Ensemble 概率预测"),
+]
 
 
 @router.get("", response_model=Paginated[ModelOut])
@@ -86,6 +94,52 @@ def upload_model(
     db.commit()
     db.refresh(model)
     return model
+
+
+@router.post("/seed-epf")
+def seed_epf_models(
+    dataset_id: Optional[int] = None,
+    db: Session = Depends(get_db),
+    _admin=Depends(get_current_admin),
+) -> dict:
+    if dataset_id is not None:
+        dataset = db.query(Dataset).filter(Dataset.id == dataset_id).first()
+    else:
+        dataset = db.query(Dataset).filter(Dataset.name == "广东电价数据").first()
+    if not dataset:
+        raise HTTPException(status_code=400, detail="Dataset not found for EPF seed.")
+
+    created = 0
+    existing = 0
+    items = []
+    for name, desc in EPF_SEED_MODELS:
+        model = db.query(Model).filter(Model.name == name, Model.dataset_id == dataset.id).first()
+        if model:
+            existing += 1
+        else:
+            model = Model(
+                name=name,
+                description=desc,
+                file_path="epf_stub.py",
+                original_name="epf_stub.py",
+                dataset_id=dataset.id,
+                train_start_date=date(2024, 1, 1),
+                train_end_date=date(2024, 12, 31),
+                prediction_type="week_ahead",
+                status="untrained",
+            )
+            db.add(model)
+            db.commit()
+            db.refresh(model)
+            created += 1
+        items.append({"id": model.id, "name": model.name})
+
+    return {
+        "dataset_id": dataset.id,
+        "created": created,
+        "existing": existing,
+        "items": items,
+    }
 
 
 def _sanitize_model_name(model_name: str) -> str:
@@ -230,7 +284,8 @@ def train_model(
         raise HTTPException(status_code=404, detail="Model not found.")
 
     try:
-        selection = select_best_epf_model()
+        metrics, source_file = load_epf_model_metrics(model.name)
+        score = score_epf_metrics(metrics)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -238,8 +293,8 @@ def train_model(
     model.trained_at = datetime.utcnow()
     model.description = _append_auto_selection_note(
         model.description,
-        selection.selected_model,
-        selection.selected_score,
+        model.name,
+        score,
     )
     db.add(model)
     db.commit()
@@ -249,13 +304,13 @@ def train_model(
         id=model.id,
         status=model.status,
         trained_at=model.trained_at,
-        selected_model=selection.selected_model,
-        selected_score=selection.selected_score,
-        retrained=selection.retrained,
-        used_cache=selection.used_cache,
+        selected_model=model.name,
+        selected_score=score,
+        retrained=False,
+        used_cache=True,
         message=(
-            f"Training completed by EPF auto-selection: {selection.selected_model}. "
-            f"{selection.detail}"
+            f"Training completed for model: {model.name}. "
+            f"Loaded metrics from {source_file}."
         ),
     )
 

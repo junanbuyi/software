@@ -50,9 +50,20 @@ def get_ranking_summary(
     end_time: Optional[datetime] = None,
     model_name: Optional[str] = None,
     rank_type: Optional[str] = None,
+    source: Optional[str] = None,
     db: Session = Depends(get_db),
     _admin=Depends(get_current_admin),
 ) -> list[RankingSummaryOut]:
+    if source == "epf":
+        return calculate_ranking_summary(
+            db,
+            start_time=start_time,
+            end_time=end_time,
+            model_name=model_name,
+            rank_type=rank_type,
+            source=source,
+        )
+
     latest_record_time = db.query(func.max(PredictionDetail.record_time)).scalar()
     if latest_record_time is None:
         return []
@@ -71,5 +82,6 @@ def get_ranking_summary(
         end_time=end_time,
         model_name=model_name,
         rank_type=rank_type,
+        source=source,
     )
 

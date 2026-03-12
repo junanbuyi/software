@@ -73,6 +73,11 @@ export const verifyDataset = async (datasetId: number) => {
   return data;
 };
 
+export const verifyDatasetAsync = async (datasetId: number) => {
+  const { data } = await apiClient.post<Dataset>(`/datasets/${datasetId}/verify-async`);
+  return data;
+};
+
 export type BaseRecord = {
   id: number;
   record_time: string;

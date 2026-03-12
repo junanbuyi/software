@@ -37,6 +37,8 @@ def execute_prediction_run(
         raise ValueError("Plan not found")
     if not plan.dataset_id:
         raise ValueError("Plan has no dataset assigned")
+    if model_id is None and plan.model_id:
+        model_id = plan.model_id
 
     if start_time is None or end_time is None:
         min_t, max_t = db.query(

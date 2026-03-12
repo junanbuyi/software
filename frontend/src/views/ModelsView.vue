@@ -2,7 +2,12 @@
   <MainLayout>
     <div class="page-header">
       <h1 class="page-title">模型管理</h1>
-      <button class="btn primary" @click="showUploadModal = true">上传模型文件</button>
+      <div class="header-actions">
+        <button class="btn" :disabled="seeding" @click="handleSeedEpfModels">
+          {{ seeding ? "初始化中..." : "初始化EPF模型" }}
+        </button>
+        <button class="btn primary" @click="showUploadModal = true">上传模型文件</button>
+      </div>
     </div>
 
     <section class="panel">
@@ -37,7 +42,11 @@
                 <a class="link" href="#" @click.prevent="handleTrainModel(model)">训练模型</a>
                 <a class="link" href="#" @click.prevent="handleUploadTrainedModel(model)">上传已训练文件</a>
                 <a class="link" href="#" @click.prevent="handleDownloadTrainedModel(model)">下载训练文件</a>
+                <a class="link danger" href="#" @click.prevent="handleDeleteModel(model)">删除</a>
               </td>
+            </tr>
+            <tr v-if="staticModels.length === 0">
+              <td colspan="6" class="empty-row">暂无模型数据</td>
             </tr>
           </tbody>
         </table>
@@ -51,40 +60,53 @@
           <h3>上传模型文件</h3>
           <button class="modal-close" @click="showUploadModal = false">&times;</button>
         </div>
-        <div class="modal-body">
-          <div class="form-group">
-            <label>模型名称 <span class="required">*</span></label>
-            <input class="input" placeholder="请输入模型名称" />
-          </div>
-          <div class="form-group">
-            <label>描述</label>
-            <textarea class="input" rows="2" placeholder="请输入描述"></textarea>
-          </div>
-          <div class="form-group">
-            <label>模型文件 <span class="required">*</span></label>
-            <input type="file" accept=".py,.pkl,.h5" />
-          </div>
-          <div class="form-group">
-            <label>选择数据集 <span class="required">*</span></label>
-            <select class="input">
-              <option value="">请选择数据集</option>
-              <option>陕西电价数据</option>
-              <option>广东电价数据</option>
-            </select>
-          </div>
-          <div class="form-group">
-            <label>预测类型 <span class="required">*</span></label>
-            <select class="input">
-              <option value="week_ahead">周前概率</option>
-            </select>
-          </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label>模型名称 <span class="required">*</span></label>
+          <input class="input" v-model="uploadForm.name" placeholder="请输入模型名称" />
         </div>
-        <div class="modal-footer">
-          <button class="btn" @click="showUploadModal = false">取消</button>
-          <button class="btn primary" @click="showUploadModal = false">上传</button>
+        <div class="form-group">
+          <label>描述</label>
+          <textarea class="input" rows="2" v-model="uploadForm.description" placeholder="请输入描述"></textarea>
+        </div>
+        <div class="form-group">
+          <label>模型文件 <span class="required">*</span></label>
+          <input type="file" accept=".py" @change="handleModelFileSelect" />
+        </div>
+        <div class="form-group">
+          <label>选择数据集 <span class="required">*</span></label>
+          <select class="input" v-model.number="uploadForm.dataset_id">
+            <option value="">请选择数据集</option>
+            <option v-for="ds in datasetOptions" :key="ds.id" :value="ds.id">
+              {{ ds.name }}
+            </option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>预测类型 <span class="required">*</span></label>
+          <select class="input" v-model="uploadForm.prediction_type">
+            <option value="week_ahead">周前概率</option>
+          </select>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>训练开始日期</label>
+            <input class="input" type="date" v-model="uploadForm.train_start_date" />
+          </div>
+          <div class="form-group">
+            <label>训练结束日期</label>
+            <input class="input" type="date" v-model="uploadForm.train_end_date" />
+          </div>
         </div>
       </div>
+      <div class="modal-footer">
+        <button class="btn" @click="showUploadModal = false">取消</button>
+        <button class="btn primary" :disabled="uploading" @click="handleUploadModel">
+          {{ uploading ? "上传中..." : "上传" }}
+        </button>
+      </div>
     </div>
+  </div>
 
     <!-- 数据集校核弹窗 -->
     <div v-if="showVerifyModal" class="modal-overlay" @click.self="showVerifyModal = false">
@@ -127,10 +149,10 @@
 </template>
 
 <script setup lang="ts">
-import { reactive, ref } from "vue";
+import { onMounted, reactive, ref } from "vue";
 import MainLayout from "../layouts/MainLayout.vue";
-import { uploadDataset, verifyDataset } from "../api/datasets";
-import { autoTrainEpfModels, downloadTrainedModelFile, uploadTrainedModelFile } from "../api/models";
+import { fetchDatasets, uploadDataset, verifyDatasetAsync } from "../api/datasets";
+import { deleteModel, downloadTrainedModelFile, fetchModels, seedEpfModels, trainModel, uploadModel, uploadTrainedModelFile } from "../api/models";
 
 type ModelItem = {
   id: number;
@@ -145,9 +167,22 @@ const showUploadModal = ref(false);
 const showVerifyModal = ref(false);
 const verifying = ref(false);
 const training = ref(false);
+const seeding = ref(false);
+const uploading = ref(false);
 const trainedFileInput = ref<HTMLInputElement | null>(null);
 const pendingUploadModelName = ref<string>("");
 const currentModel = ref<ModelItem | null>(null);
+const datasetOptions = ref<{ id: number; name: string }[]>([]);
+
+const uploadForm = reactive({
+  name: "",
+  description: "",
+  dataset_id: "" as number | "",
+  prediction_type: "week_ahead",
+  train_start_date: "2024-01-01",
+  train_end_date: "2024-12-31",
+  file: null as File | null,
+});
 
 const verifyForm = reactive({
   name: "",
@@ -155,40 +190,95 @@ const verifyForm = reactive({
   file: null as File | null,
 });
 
-const staticModels = ref<ModelItem[]>([
-  {
-    id: 1,
-    name: "TCN周前概率",
-    description: "EPF TCN 概率预测",
-    dataset: "广东电价数据",
-    type: "周前概率",
-    verify_status: "未校核",
-  },
-  {
-    id: 2,
-    name: "Mamba周前概率",
-    description: "EPF Mamba 概率预测",
-    dataset: "广东电价数据",
-    type: "周前概率",
-    verify_status: "未校核",
-  },
-  {
-    id: 3,
-    name: "NLinear周前概率",
-    description: "EPF NLinear 概率预测",
-    dataset: "广东电价数据",
-    type: "周前概率",
-    verify_status: "未校核",
-  },
-  {
-    id: 4,
-    name: "集成周前概率",
-    description: "EPF Ensemble 概率预测",
-    dataset: "广东电价数据",
-    type: "周前概率",
-    verify_status: "未校核",
-  },
-]);
+const staticModels = ref<ModelItem[]>([]);
+
+const toPlanTypeLabel = (predictionType: string) => {
+  const text = (predictionType || "").toLowerCase();
+  if (text.includes("week")) return "周前概率";
+  if (text.includes("day")) return "日前预测";
+  return predictionType || "未知";
+};
+
+const loadModels = async () => {
+  try {
+    const [modelRes, datasetRes] = await Promise.all([
+      fetchModels({ page: 1, size: 200 }),
+      fetchDatasets({ page: 1, size: 200 }),
+    ]);
+    const datasetMap = new Map<number, string>(
+      datasetRes.items.map((item) => [item.id, item.name]),
+    );
+    datasetOptions.value = datasetRes.items.map((item) => ({
+      id: item.id,
+      name: item.name,
+    }));
+    staticModels.value = modelRes.items.map((item) => ({
+      id: item.id,
+      name: item.name,
+      description: item.description || "-",
+      dataset: item.dataset_id ? datasetMap.get(item.dataset_id) || "未绑定" : "未绑定",
+      type: toPlanTypeLabel(item.prediction_type),
+      verify_status: undefined,
+    }));
+  } catch (err: any) {
+    const detail = err?.response?.data?.detail || err?.message || "未知错误";
+    alert("加载模型失败: " + detail);
+  }
+};
+
+const handleModelFileSelect = (e: Event) => {
+  const target = e.target as HTMLInputElement;
+  if (target.files && target.files[0]) {
+    uploadForm.file = target.files[0];
+  }
+};
+
+const handleUploadModel = async () => {
+  if (uploading.value) return;
+  if (!uploadForm.name || !uploadForm.dataset_id || !uploadForm.file) {
+    alert("请填写模型名称、选择数据集并选择模型文件");
+    return;
+  }
+  uploading.value = true;
+  try {
+    const formData = new FormData();
+    formData.append("name", uploadForm.name);
+    formData.append("description", uploadForm.description || "");
+    formData.append("dataset_id", String(uploadForm.dataset_id));
+    formData.append("train_start_date", uploadForm.train_start_date);
+    formData.append("train_end_date", uploadForm.train_end_date);
+    formData.append("prediction_type", uploadForm.prediction_type);
+    formData.append("file", uploadForm.file);
+    await uploadModel(formData);
+    showUploadModal.value = false;
+    uploadForm.name = "";
+    uploadForm.description = "";
+    uploadForm.dataset_id = "";
+    uploadForm.file = null;
+    await loadModels();
+    alert("模型上传成功");
+  } catch (err: any) {
+    const detail = err?.response?.data?.detail || err?.message || "未知错误";
+    alert("模型上传失败: " + detail);
+  } finally {
+    uploading.value = false;
+  }
+};
+
+const handleSeedEpfModels = async () => {
+  if (seeding.value) return;
+  seeding.value = true;
+  try {
+    const result = await seedEpfModels();
+    await loadModels();
+    alert(`初始化完成：新增 ${result.created}，已存在 ${result.existing}`);
+  } catch (err: any) {
+    const detail = err?.response?.data?.detail || err?.message || "未知错误";
+    alert("初始化失败: " + detail);
+  } finally {
+    seeding.value = false;
+  }
+};
 
 const openVerifyModal = (model: ModelItem) => {
   currentModel.value = model;
@@ -223,7 +313,7 @@ const handleUploadAndVerify = async () => {
     const uploadedDataset = await uploadDataset(formData);
     
     // 2. 校核数据集
-    const verifiedDataset = await verifyDataset(uploadedDataset.id);
+    const verifiedDataset = await verifyDatasetAsync(uploadedDataset.id);
     
     // 3. 更新模型的校核状态
     if (currentModel.value) {
@@ -234,7 +324,7 @@ const handleUploadAndVerify = async () => {
     }
     
     showVerifyModal.value = false;
-    alert(`校核完成: ${verifiedDataset.verify_status}`);
+    alert(`校核任务已提交: ${verifiedDataset.verify_status || "校核中"}`);
   } catch (err: any) {
     const detail = err?.response?.data?.detail || err?.message || "未知错误";
     alert("校核失败: " + detail);
@@ -248,25 +338,25 @@ const handleTrainModel = async (model: ModelItem) => {
   if (training.value) return;
   training.value = true;
   try {
-    const result = await autoTrainEpfModels();
-    const selected = result.selected_model.toLowerCase();
+    const result = await trainModel(model.id);
+    const selected = (result.selected_model || model.name).toLowerCase();
     staticModels.value.forEach((item) => {
-      item.description = item.description.replace(/（已自动选中）/g, "");
+      item.description = item.description.replace(/（已训练）/g, "");
       const normalized = item.name.toLowerCase();
       if (selected.includes("ensemble") && normalized.includes("集成")) {
-        item.description = `${item.description}（已自动选中）`;
+        item.description = `${item.description}（已训练）`;
       } else if (selected.includes("mamba") && normalized.includes("mamba")) {
-        item.description = `${item.description}（已自动选中）`;
+        item.description = `${item.description}（已训练）`;
       } else if (selected.includes("tcn") && normalized.includes("tcn")) {
-        item.description = `${item.description}（已自动选中）`;
+        item.description = `${item.description}（已训练）`;
       } else if (selected.includes("nlinear") && normalized.includes("nlinear")) {
-        item.description = `${item.description}（已自动选中）`;
+        item.description = `${item.description}（已训练）`;
       }
     });
-    const mode = result.retrained ? "已重新训练" : "使用1分钟内缓存结果";
     alert(
-      `训练完成（${mode}），自动选中模型：${result.selected_model}，综合得分：${result.selected_score.toFixed(4)}`
+      `训练完成，模型：${result.selected_model || model.name}，综合得分：${(result.selected_score || 0).toFixed(4)}`
     );
+    await loadModels();
   } catch (err: any) {
     const detail = err?.response?.data?.detail || err?.message || "未知错误";
     alert("训练失败: " + detail);
@@ -320,11 +410,25 @@ const handleDownloadTrainedModel = async (model: ModelItem) => {
   }
 };
 
+const handleDeleteModel = async (model: ModelItem) => {
+  if (!confirm(`确定删除模型 "${model.name}" 吗？`)) return;
+  try {
+    await deleteModel(model.id);
+    staticModels.value = staticModels.value.filter((item) => item.id !== model.id);
+    alert("删除成功");
+  } catch (err: any) {
+    const detail = err?.response?.data?.detail || err?.message || "未知错误";
+    alert("删除失败: " + detail);
+  }
+};
+
 const getStatusClass = (status?: string) => {
   if (status === "校核通过") return "verified";
   if (status === "校核失败") return "failed";
   return "unverified";
 };
+
+onMounted(loadModels);
 </script>
 
 <style scoped>
@@ -340,6 +444,11 @@ const getStatusClass = (status?: string) => {
   font-size: 16px;
   font-weight: 600;
   color: var(--text);
+}
+.header-actions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
 }
 .table td a.link {
   margin-right: 12px;

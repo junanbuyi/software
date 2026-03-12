@@ -6,6 +6,7 @@ export type Plan = {
   name: string;
   plan_type: string;
   dataset_id?: number | null;
+  model_id?: number | null;
   status: string;
   description?: string | null;
   created_by: number;

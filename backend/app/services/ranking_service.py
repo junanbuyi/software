@@ -13,6 +13,92 @@ from app.models.prediction_detail import PredictionDetail
 from app.models.base_prediction_data import BasePredictionData
 from app.models.prediction_run import PredictionRun
 from app.models.base_price_data import BasePriceData
+from app.services.epf_model_selector import load_epf_model_metrics, score_epf_metrics
+from app.services.epf_prob_service import load_epf_prob_rows
+
+
+EPF_RANK_MODELS = [
+    "TCN周前概率",
+    "Mamba周前概率",
+    "NLinear周前概率",
+    "集成周前概率",
+]
+
+
+def _build_epf_summaries(
+    db: Session,
+    *,
+    start_time: Optional[datetime],
+    end_time: Optional[datetime],
+    model_name: Optional[str],
+) -> list[Dict[str, object]]:
+    summaries: list[Dict[str, object]] = []
+    for idx, model in enumerate(EPF_RANK_MODELS, start=1):
+        if model_name and model_name.lower() not in model.lower():
+            continue
+        try:
+            metrics, _ = load_epf_model_metrics(model)
+        except ValueError:
+            continue
+        try:
+            rows, _ = load_epf_prob_rows(
+                model,
+                start_time=start_time,
+                end_time=end_time,
+                prefer_week=False,
+            )
+        except ValueError:
+            rows = []
+
+        if (start_time or end_time) and not rows:
+            continue
+
+        if rows:
+            period_start = rows[0]["record_time"]
+            period_end = rows[-1]["record_time"]
+        else:
+            period_start = datetime(2024, 5, 10)
+            period_end = datetime(2024, 5, 17)
+
+        load_label = "未知"
+        wind_label = "未知"
+        weather_label = "未知"
+        if period_start and period_end:
+            base_rows = db.query(
+                BasePriceData.load_kw,
+                BasePriceData.wind_speed,
+                BasePriceData.cloud_cover,
+            ).filter(
+                BasePriceData.record_time >= period_start,
+                BasePriceData.record_time <= period_end,
+            ).all()
+            if base_rows:
+                avg_load = _safe_mean(_to_float(item.load_kw, 0.0) for item in base_rows)
+                avg_wind = _safe_mean(_to_float(item.wind_speed, -1.0) for item in base_rows)
+                avg_cloud = _safe_mean(_to_float(item.cloud_cover, 0.0) for item in base_rows)
+                load_label = _load_label(avg_load)
+                wind_label = _wind_label(avg_wind)
+                weather_label = _weather_label_from_cloud(avg_cloud)
+
+        summaries.append(
+            {
+                "plan_id": idx,
+                "dataset": "广东电价数据",
+                "type": "周前概率",
+                "model": model,
+                "period": _period_text(period_start, period_end),
+                "load": load_label,
+                "wind": wind_label,
+                "weather_type": weather_label,
+                "mae": float(metrics["MAE"]),
+                "rmse": float(metrics["RMSE"]),
+                "r2": float(metrics["R2"]),
+                "imape": float(metrics["MAPE_150"]),
+                "score": float(score_epf_metrics(metrics)),
+                "sample_count": len(rows),
+            }
+        )
+    return summaries
 
 
 def _to_float(value: object, default: float = 0.0) -> float:
@@ -112,8 +198,17 @@ def calculate_ranking_summary(
     end_time: Optional[datetime] = None,
     model_name: Optional[str] = None,
     rank_type: Optional[str] = None,
+    source: Optional[str] = None,
 ) -> list[Dict[str, object]]:
     # Prefer latest prediction_run if available; otherwise fallback to prediction_detail.
+    if source == "epf":
+        return _build_epf_summaries(
+            db,
+            start_time=start_time,
+            end_time=end_time,
+            model_name=model_name,
+        )
+
     run_query = (
         db.query(
             PredictionRun.id.label("run_id"),
@@ -233,6 +328,16 @@ def calculate_ranking_summary(
             )
 
         summaries.sort(key=lambda item: (item["score"], -item["imape"], -item["sample_count"]), reverse=True)
+        return summaries
+
+    # EPF fallback: return fixed 4-model summaries when no prediction_run data.
+    summaries = _build_epf_summaries(
+        db,
+        start_time=start_time,
+        end_time=end_time,
+        model_name=model_name,
+    )
+    if summaries:
         return summaries
 
     query = (

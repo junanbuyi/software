@@ -45,6 +45,7 @@ def create_plan(
         name=payload.name,
         plan_type=payload.plan_type,
         dataset_id=payload.dataset_id,
+        model_id=payload.model_id,
         status=payload.status,
         description=payload.description,
         created_by=current_admin.id,
@@ -79,11 +80,18 @@ def update_plan(
     plan = db.query(Plan).filter(Plan.id == plan_id).first()
     if not plan:
         raise HTTPException(status_code=404, detail="Plan not found")
-    plan.name = payload.name
-    plan.plan_type = payload.plan_type
-    plan.dataset_id = payload.dataset_id
-    plan.status = payload.status
-    plan.description = payload.description
+    if payload.name is not None:
+        plan.name = payload.name
+    if payload.plan_type is not None:
+        plan.plan_type = payload.plan_type
+    if payload.dataset_id is not None:
+        plan.dataset_id = payload.dataset_id
+    if payload.model_id is not None:
+        plan.model_id = payload.model_id
+    if payload.status is not None:
+        plan.status = payload.status
+    if payload.description is not None:
+        plan.description = payload.description
     db.add(plan)
     db.commit()
     db.refresh(plan)

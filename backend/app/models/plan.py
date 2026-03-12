@@ -18,6 +18,7 @@ class Plan(Base):
     name: Mapped[str] = mapped_column(String(100), index=True)
     plan_type: Mapped[str] = mapped_column(String(50))
     dataset_id: Mapped[Optional[int]] = mapped_column(ForeignKey("dataset.id"), index=True)
+    model_id: Mapped[Optional[int]] = mapped_column(ForeignKey("model.id"), index=True, nullable=True)
     status: Mapped[str] = mapped_column(String(20), default="未运行")
     description: Mapped[Optional[str]] = mapped_column(Text)
     created_by: Mapped[Optional[int]] = mapped_column(ForeignKey("admin_user.id"), index=True, nullable=True)

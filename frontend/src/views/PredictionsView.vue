@@ -95,6 +95,7 @@
 import { computed, onMounted, ref } from "vue";
 import MainLayout from "../layouts/MainLayout.vue";
 import { fetchDatasets } from "../api/datasets";
+import { fetchModels } from "../api/models";
 import { deletePlan, fetchPlans } from "../api/plans";
 
 const showCreateModal = ref(false);
@@ -134,16 +135,20 @@ const typeToLabel = (planType: string) => {
 const loadPlans = async () => {
   loading.value = true;
   try {
-    const [planRes, datasetRes] = await Promise.all([
+    const [planRes, datasetRes, modelRes] = await Promise.all([
       fetchPlans({ page: 1, size: 200 }),
       fetchDatasets({ page: 1, size: 200 }),
+      fetchModels({ page: 1, size: 200 }),
     ]);
     const datasetMap = new Map<number, string>(
       datasetRes.items.map((item) => [item.id, item.name]),
     );
+    const modelMap = new Map<number, string>(
+      modelRes.items.map((item) => [item.id, item.name]),
+    );
     plans.value = planRes.items.map((item) => ({
       id: item.id,
-      name: item.name,
+      name: item.model_id ? modelMap.get(item.model_id) || item.name : item.name,
       dataset: item.dataset_id ? datasetMap.get(item.dataset_id) || "广东电价数据" : "广东电价数据",
       type: typeToLabel(item.plan_type),
       description: item.description || "-",

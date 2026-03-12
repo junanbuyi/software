@@ -25,7 +25,7 @@
           </thead>
           <tbody>
             <tr>
-              <td>{{ plan.name }}</td>
+              <td>{{ planDisplayName }}</td>
               <td>{{ plan.dataset }}</td>
               <td>{{ plan.type }}</td>
               <td class="period-cell">
@@ -77,7 +77,8 @@
           <div class="chart-legend" v-if="hasCalculated && chartDataAvailable">
             <template v-if="!isTcnPlan">
               <span class="legend-item"><span class="line-solid blue"></span> 电价实际值</span>
-              <span class="legend-item"><span class="line-dashed orange"></span> {{ modelDisplayName }}</span>
+              <span class="legend-item"><span class="line-dashed orange"></span> {{ modelDisplayName }} (QR-0.5)</span>
+              <span class="legend-item"><span class="square light-blue"></span> 95%概率区间</span>
               <span class="legend-item"><span class="square red"></span> 负荷</span>
             </template>
             <template v-else>
@@ -118,6 +119,7 @@
                   <line x1="0" y1="66.6" x2="600" y2="66.6" stroke="#f0f0f0" stroke-width="1"/>
                   <line x1="0" y1="133.3" x2="600" y2="133.3" stroke="#f0f0f0" stroke-width="1"/>
                   <line x1="0" y1="200" x2="600" y2="200" stroke="#f0f0f0" stroke-width="1"/>
+                  <polygon :points="currentDayBand95Points" fill="rgba(24,144,255,0.2)" stroke="none"/>
                   <polyline fill="none" stroke="#ff4d4f" stroke-width="2" :points="currentDayLoadPoints"/>
                   <polyline fill="none" stroke="#faad14" stroke-width="2" stroke-dasharray="6,3" :points="currentDayPredictedPoints"/>
                   <polyline fill="none" stroke="#1890ff" stroke-width="2" :points="currentDayActualPoints"/>
@@ -224,6 +226,7 @@ import { computed, ref, onMounted } from "vue";
 import { useRouter, useRoute } from "vue-router";
 import MainLayout from "../layouts/MainLayout.vue";
 import { fetchModels } from "../api/models";
+import { updatePlan } from "../api/plans";
 
 const router = useRouter();
 const route = useRoute();
@@ -235,6 +238,9 @@ type PredictionRecord = {
   record_time: string;
   actual_price: number;
   predicted_price: number;
+  qr_025?: number;
+  qr_50?: number;
+  qr_975?: number;
   load_kw: number;
 };
 
@@ -273,13 +279,14 @@ const plan = ref<{ name: string; dataset: string; type: string; description: str
 });
 
 const models = ref<{ id: number; name: string; selected: boolean }[]>([]);
+const planModelId = ref<number | null>(null);
 const currentRunId = ref<number | null>(null);
 const showModelPicker = ref(false);
 const modelListRef = ref<HTMLDivElement | null>(null);
 const availableRange = ref<{ start: string; end: string }>({ start: "", end: "" });
 
 const isTcnPlan = computed(() => {
-  const name = (plan.value.name || "").toLowerCase();
+  const name = (selectedModels.value[0]?.name || plan.value.name || "").toLowerCase();
   return name.includes("tcn");
 });
 
@@ -287,6 +294,9 @@ const selectedModels = computed(() => models.value.filter((m) => m.selected));
 const modelDisplayName = computed(() => {
   const name = selectedModels.value[0]?.name;
   return name ? `${name}预测值` : "模型预测值";
+});
+const planDisplayName = computed(() => {
+  return selectedModels.value[0]?.name || plan.value.name;
 });
 const getAuthToken = () => localStorage.getItem("access_token") || "";
 
@@ -330,7 +340,9 @@ const formatLocalDateTime = (d: Date) => {
 };
 
 const fetchPredictionData = async () => {
-  if (!periodEnd.value || !currentRunId.value) return;
+  if (!periodEnd.value) return;
+  const modelId = selectedModels.value[0]?.id;
+  if (!modelId) return;
 
   const startDate = new Date(`${periodStart.value}T00:00:00`);
   const endDate = new Date(`${periodEnd.value}T23:59:59`);
@@ -339,15 +351,18 @@ const fetchPredictionData = async () => {
 
   try {
     const res = await fetch(
-      `${API_BASE}/plans/${planId.value}/runs/${currentRunId.value}/records?start_time=${startTime}&end_time=${endTime}&size=5000`,
+      `${API_BASE}/chart/epf-probability?model_id=${modelId}&start_time=${startTime}&end_time=${endTime}`,
       { headers: { Authorization: `Bearer ${getAuthToken()}` } }
     );
     if (res.ok) {
       const data = await res.json();
       predictionData.value = data.items.map((r: any) => ({
         record_time: r.record_time,
-        actual_price: r.actual_price,
-        predicted_price: r.predicted_price,
+        actual_price: r.real,
+        predicted_price: r.qr_50,
+        qr_50: r.qr_50,
+        qr_025: r.qr_025,
+        qr_975: r.qr_975,
         load_kw: r.load_kw || 0,
       }));
     }
@@ -358,6 +373,8 @@ const fetchPredictionData = async () => {
 
 const fetchTcnData = async () => {
   if (!periodStart.value || !periodEnd.value) return;
+  const modelId = selectedModels.value[0]?.id;
+  if (!modelId) return;
 
   const startDate = new Date(`${periodStart.value}T00:00:00`);
   const endDate = new Date(`${periodEnd.value}T23:59:59`);
@@ -366,12 +383,23 @@ const fetchTcnData = async () => {
 
   try {
     const res = await fetch(
-      `${API_BASE}/chart/tcn-probability?start_time=${startTime}&end_time=${endTime}`,
+      `${API_BASE}/chart/epf-probability?model_id=${modelId}&start_time=${startTime}&end_time=${endTime}`,
       { headers: { Authorization: `Bearer ${getAuthToken()}` } }
     );
     if (res.ok) {
       const data = await res.json();
-      tcnData.value = data.items;
+      tcnData.value = data.items.map((r: any) => ({
+        record_time: r.record_time,
+        real: r.real,
+        qr_005: r.qr_005,
+        qr_025: r.qr_025,
+        qr_05: r.qr_05,
+        qr_50: r.qr_50,
+        qr_95: r.qr_95,
+        qr_975: r.qr_975,
+        qr_995: r.qr_995,
+        load_kw: r.load_kw || 0,
+      }));
     }
   } catch (e) {
     console.error("获取TCN数据失败", e);
@@ -383,6 +411,18 @@ const doFetchData = async () => {
     await fetchTcnData();
   } else {
     await fetchPredictionData();
+  }
+};
+
+const persistPlanModel = async () => {
+  const selected = selectedModels.value[0];
+  if (!selected || selected.id <= 0) return;
+  if (planModelId.value === selected.id) return;
+  try {
+    await updatePlan(planId.value, { model_id: selected.id });
+    planModelId.value = selected.id;
+  } catch (e) {
+    console.error("更新方案模型失败", e);
   }
 };
 
@@ -399,10 +439,14 @@ const handleSave = async () => {
     return;
   }
   loading.value = true;
-  await doFetchData();
-  loading.value = false;
-  hasCalculated.value = true;
-  currentDayIndex.value = 0;
+  try {
+    await persistPlanModel();
+    await doFetchData();
+    hasCalculated.value = true;
+    currentDayIndex.value = 0;
+  } finally {
+    loading.value = false;
+  }
 
   localStorage.setItem(SAVE_KEY, JSON.stringify({
     periodStart: periodStart.value,
@@ -428,15 +472,15 @@ const handleCalculate = async () => {
     alert("无法获取数据集，请刷新页面重试");
     return;
   }
-  await createRun();
-  if (!currentRunId.value) {
-    return;
-  }
   loading.value = true;
-  await doFetchData();
-  loading.value = false;
-  hasCalculated.value = true;
-  currentDayIndex.value = 0;
+  try {
+    await persistPlanModel();
+    await doFetchData();
+    hasCalculated.value = true;
+    currentDayIndex.value = 0;
+  } finally {
+    loading.value = false;
+  }
 };
 
 const loadSavedState = () => {
@@ -459,15 +503,16 @@ const loadPlanInfo = async () => {
     const res = await fetch(`${API_BASE}/plans/${planId.value}`, {
       headers: { Authorization: `Bearer ${getAuthToken()}` },
     });
-    if (res.ok) {
-      const data = await res.json();
-      plan.value = {
-        name: data.name,
-        dataset: "广东电价数据",
-        type: "周前概率",
-        description: data.description || "",
-      };
-      currentDatasetId.value = data.dataset_id || null;
+      if (res.ok) {
+        const data = await res.json();
+        plan.value = {
+          name: data.name,
+          dataset: "广东电价数据",
+          type: "周前概率",
+          description: data.description || "",
+        };
+        planModelId.value = data.model_id || null;
+        currentDatasetId.value = data.dataset_id || null;
       if (currentDatasetId.value) {
         await loadDatasetRange(currentDatasetId.value);
       }
@@ -498,7 +543,10 @@ const loadModels = async () => {
       selected: false,
     }));
     if (models.value.length > 0) {
-      models.value[0].selected = true;
+      const matched = planModelId.value
+        ? models.value.find((m) => m.id === planModelId.value)
+        : null;
+      (matched || models.value[0]).selected = true;
       return;
     }
     if (!models.value.length) {
@@ -529,6 +577,7 @@ const selectModel = (modelId: number) => {
     ...m,
     selected: m.id === modelId,
   }));
+  planModelId.value = modelId;
   if (!plan.value.name) {
     const current = models.value.find((m) => m.selected);
     if (current) {
@@ -630,8 +679,8 @@ onMounted(async () => {
   await loadModels();
   await loadLatestRun();
   if (currentRunId.value) {
-    await fetchPredictionData();
-    if (predictionData.value.length > 0) {
+    await doFetchData();
+    if ((isTcnPlan.value && tcnData.value.length > 0) || (!isTcnPlan.value && predictionData.value.length > 0)) {
       hasCalculated.value = true;
     }
   }
@@ -686,7 +735,12 @@ const hourLabels = ['0', '4', '8', '12', '16', '20', '24'];
 const currentDayPriceRange = computed(() => {
   const data = currentDayData.value;
   if (data.length === 0) return { min: 0, max: 1500 };
-  const prices = data.flatMap(r => [r.actual_price, r.predicted_price]);
+  const prices = data.flatMap(r => {
+    const vals = [r.actual_price, r.predicted_price];
+    if (r.qr_025 !== undefined) vals.push(r.qr_025);
+    if (r.qr_975 !== undefined) vals.push(r.qr_975);
+    return vals;
+  });
   const minVal = Math.min(...prices);
   const maxVal = Math.max(...prices);
   const padding = (maxVal - minVal) * 0.1 || 50;
@@ -728,6 +782,27 @@ const currentDayPredictedPoints = computed(() => {
     const y = height - ((r.predicted_price - minPrice) / (maxPrice - minPrice)) * height;
     return `${x.toFixed(1)},${Math.max(0, Math.min(height, y)).toFixed(1)}`;
   }).join(" ");
+});
+
+const currentDayBand95Points = computed(() => {
+  const data = currentDayData.value;
+  if (data.length === 0) return "";
+  const { min: minPrice, max: maxPrice } = currentDayPriceRange.value;
+  const width = 600, height = 200;
+  const step = width / Math.max(data.length - 1, 1);
+  const upper = data.map((r, i) => {
+    const x = i * step;
+    const val = r.qr_975 ?? r.predicted_price;
+    const y = height - ((val - minPrice) / (maxPrice - minPrice)) * height;
+    return `${x.toFixed(1)},${Math.max(0, Math.min(height, y)).toFixed(1)}`;
+  });
+  const lower = data.map((r, i) => {
+    const x = i * step;
+    const val = r.qr_025 ?? r.predicted_price;
+    const y = height - ((val - minPrice) / (maxPrice - minPrice)) * height;
+    return `${x.toFixed(1)},${Math.max(0, Math.min(height, y)).toFixed(1)}`;
+  }).reverse();
+  return [...upper, ...lower].join(" ");
 });
 
 const currentDayLoadPoints = computed(() => {

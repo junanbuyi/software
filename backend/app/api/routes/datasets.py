@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 from typing import Optional
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
@@ -203,6 +203,66 @@ def upload_dataset(
     return dataset
 
 
+def _verify_dataset_internal(db: Session, dataset_id: int) -> tuple[Dataset, Optional[str]]:
+    dataset = db.query(Dataset).filter(Dataset.id == dataset_id).first()
+    if not dataset:
+        return None, "数据集不存在"  # type: ignore[return-value]
+    _ensure_allowed_dataset(dataset)
+
+    uploaded_records = db.query(DatasetRecord).filter(
+        DatasetRecord.dataset_id == dataset_id
+    ).order_by(DatasetRecord.record_time).all()
+
+    if not uploaded_records:
+        return dataset, "数据集没有记录，无法校核"
+
+    is_compliant, compliance_reason = check_dataset_political_compliance(dataset, uploaded_records)
+    if not is_compliant:
+        dataset.verify_status = "校核失败"
+        db.commit()
+        db.refresh(dataset)
+        return dataset, f"政治内容校核不通过: {compliance_reason}"
+
+    base_records = db.query(BasePriceData).order_by(BasePriceData.record_time).all()
+    if not base_records:
+        return dataset, "基础数据不存在，无法校核"
+
+    base_data_map = {}
+    for r in base_records:
+        base_data_map[r.record_time] = {
+            "price_kwh": float(r.price_kwh) if r.price_kwh else 0.0,
+            "load_kw": float(r.load_kw) if r.load_kw else 0.0,
+        }
+
+    is_match = True
+    for record in uploaded_records:
+        base_data = base_data_map.get(record.record_time)
+        if base_data is None:
+            is_match = False
+            break
+        if abs(float(record.price_kwh or 0) - base_data["price_kwh"]) > 0.01:
+            is_match = False
+            break
+        if abs(float(record.load_kw or 0) - base_data["load_kw"]) > 0.01:
+            is_match = False
+            break
+
+    dataset.verify_status = "校核通过" if is_match else "校核失败"
+    db.commit()
+    db.refresh(dataset)
+    return dataset, None
+
+
+def _verify_dataset_background(dataset_id: int) -> None:
+    from app.db.session import SessionLocal
+
+    db = SessionLocal()
+    try:
+        _verify_dataset_internal(db, dataset_id)
+    finally:
+        db.close()
+
+
 @router.post("/{dataset_id}/verify", response_model=DatasetOut)
 def verify_dataset(
     dataset_id: int,
@@ -210,67 +270,29 @@ def verify_dataset(
     _admin=Depends(get_current_admin),
 ) -> Dataset:
     """
-    校核数据集：将上传的数据与基础数据(base_price_data)对比。
-    相同→校核通过，不同→校核失败。
+    同步校核数据集。
     """
+    dataset, err = _verify_dataset_internal(db, dataset_id)
+    if err:
+        raise HTTPException(status_code=400, detail=err)
+    return dataset
+
+
+@router.post("/{dataset_id}/verify-async", response_model=DatasetOut)
+def verify_dataset_async(
+    dataset_id: int,
+    background: BackgroundTasks,
+    db: Session = Depends(get_db),
+    _admin=Depends(get_current_admin),
+) -> Dataset:
     dataset = db.query(Dataset).filter(Dataset.id == dataset_id).first()
     if not dataset:
         raise HTTPException(status_code=404, detail="数据集不存在")
     _ensure_allowed_dataset(dataset)
-    
-    # 获取该数据集的记录
-    uploaded_records = db.query(DatasetRecord).filter(
-        DatasetRecord.dataset_id == dataset_id
-    ).order_by(DatasetRecord.record_time).all()
-    
-    if not uploaded_records:
-        raise HTTPException(status_code=400, detail="数据集没有记录，无法校核")
-    
-    # 获取基础数据
-    is_compliant, compliance_reason = check_dataset_political_compliance(dataset, uploaded_records)
-    if not is_compliant:
-        dataset.verify_status = "校核失败"
-        db.commit()
-        db.refresh(dataset)
-        raise HTTPException(status_code=400, detail=f"政治内容校核不通过: {compliance_reason}")
-
-    base_records = db.query(BasePriceData).order_by(BasePriceData.record_time).all()
-    
-    if not base_records:
-        raise HTTPException(status_code=400, detail="基础数据不存在，无法校核")
-    
-    # 构建基础数据的时间->数据映射
-    base_data_map = {}
-    for r in base_records:
-        base_data_map[r.record_time] = {
-            "price_kwh": float(r.price_kwh) if r.price_kwh else 0.0,
-            "load_kw": float(r.load_kw) if r.load_kw else 0.0,
-        }
-    
-    # 对比上传数据与基础数据（比较电价和负荷）
-    is_match = True
-    for record in uploaded_records:
-        base_data = base_data_map.get(record.record_time)
-        if base_data is None:
-            # 上传数据的时间点在基础数据中不存在
-            is_match = False
-            break
-        # 比较电价（允许小数点误差）
-        if abs(float(record.price_kwh or 0) - base_data["price_kwh"]) > 0.01:
-            is_match = False
-            break
-        # 比较负荷（允许小数点误差）
-        if abs(float(record.load_kw or 0) - base_data["load_kw"]) > 0.01:
-            is_match = False
-            break
-    
-    if is_match:
-        dataset.verify_status = "校核通过"
-    else:
-        dataset.verify_status = "校核失败"
-    
+    dataset.verify_status = "校核中"
     db.commit()
     db.refresh(dataset)
+    background.add_task(_verify_dataset_background, dataset_id)
     return dataset
 
 

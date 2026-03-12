@@ -24,6 +24,8 @@
           <select v-model="selectedModel" class="input">
             <option value="mamba">mamba周前</option>
             <option value="tcn">tcn周前</option>
+            <option value="nlinear">nlinear周前</option>
+            <option value="ensemble">集成周前</option>
           </select>
         </div>
         <button class="btn primary" @click="handlePredict">预测</button>
@@ -44,9 +46,10 @@
         </div>
         <div class="chart-container">
           <div class="chart-legend" v-if="hasPredicted">
-            <template v-if="selectedModel === 'mamba'">
+            <template v-if="selectedModel !== 'tcn'">
               <span class="legend-item"><span class="line-solid blue"></span> 电价实际值</span>
-              <span class="legend-item"><span class="line-dashed orange"></span> mamba预测值</span>
+              <span class="legend-item"><span class="line-dashed orange"></span> 点预测值(QR-0.5)</span>
+              <span class="legend-item"><span class="square light-blue"></span> 95%概率区间</span>
               <span class="legend-item"><span class="square red"></span> 负荷</span>
             </template>
             <template v-else>
@@ -73,7 +76,7 @@
               ></span>
             </div>
             <!-- 当天图表 - Mamba确定性预测 -->
-            <div v-if="selectedModel === 'mamba'" class="chart-with-axis">
+            <div v-if="selectedModel !== 'tcn'" class="chart-with-axis">
               <div class="y-axis y-axis-left">
                 <div class="y-axis-label">电价(元/kWh)</div>
                 <div class="y-axis-ticks">
@@ -89,6 +92,7 @@
                   <line x1="0" y1="66.6" x2="600" y2="66.6" stroke="#f0f0f0" stroke-width="1"/>
                   <line x1="0" y1="133.3" x2="600" y2="133.3" stroke="#f0f0f0" stroke-width="1"/>
                   <line x1="0" y1="200" x2="600" y2="200" stroke="#f0f0f0" stroke-width="1"/>
+                  <polygon :points="currentDayBand95Points" fill="rgba(24,144,255,0.2)" stroke="none"/>
                   <polyline fill="none" stroke="#ff4d4f" stroke-width="2" :points="currentDayLoadPoints"/>
                   <polyline fill="none" stroke="#faad14" stroke-width="2" stroke-dasharray="6,3" :points="currentDayPredictedPoints"/>
                   <polyline fill="none" stroke="#1890ff" stroke-width="2" :points="currentDayActualPoints"/>
@@ -290,6 +294,9 @@ type PredictionRecord = {
   record_time: string;
   actual_price: number;
   predicted_price: number;
+  qr_025?: number;
+  qr_50?: number;
+  qr_975?: number;
   load_kw: number;
 };
 
@@ -353,7 +360,7 @@ const formatLocalDateTime = (d: Date) => {
 };
 
 const fetchPredictionData = async (dateStr: string) => {
-  if (!dateStr || !currentDatasetId.value) return;
+  if (!dateStr) return;
   loading.value = true;
   
   const endDate = new Date(`${dateStr}T23:59:59`);
@@ -363,18 +370,22 @@ const fetchPredictionData = async (dateStr: string) => {
   
   const startTime = formatLocalDateTime(startDate);
   const endTime = formatLocalDateTime(endDate);
+  const modelName = selectedModel.value || "mamba";
   
   try {
     const res = await fetch(
-      `${API_BASE}/chart/prediction?dataset_id=${currentDatasetId.value}&start_time=${startTime}&end_time=${endTime}`,
+      `${API_BASE}/chart/epf-probability?model=${encodeURIComponent(modelName)}&start_time=${startTime}&end_time=${endTime}`,
       { headers: { Authorization: `Bearer ${getAuthToken()}` } }
     );
     if (res.ok) {
       const data = await res.json();
       predictionData.value = data.items.map((r: any) => ({
         record_time: r.record_time,
-        actual_price: r.actual_price,
-        predicted_price: r.predicted_price,
+        actual_price: r.real,
+        predicted_price: r.qr_50,
+        qr_50: r.qr_50,
+        qr_025: r.qr_025,
+        qr_975: r.qr_975,
         load_kw: r.load_kw || 0,
       }));
     }
@@ -428,7 +439,7 @@ const fetchTcnData = async (dateStr: string) => {
 
   try {
     const res = await fetch(
-      `${API_BASE}/chart/tcn-probability?start_time=${startTime}&end_time=${endTime}`,
+      `${API_BASE}/chart/epf-probability?model=tcn&start_time=${startTime}&end_time=${endTime}`,
       { headers: { Authorization: `Bearer ${getAuthToken()}` } }
     );
     if (res.ok) {
@@ -534,7 +545,12 @@ const hourLabels = ['0', '4', '8', '12', '16', '20', '24'];
 const currentDayPriceRange = computed(() => {
   const data = currentDayData.value;
   if (data.length === 0) return { min: 0, max: 1500 };
-  const prices = data.flatMap(r => [r.actual_price, r.predicted_price]);
+  const prices = data.flatMap(r => {
+    const vals = [r.actual_price, r.predicted_price];
+    if (r.qr_025 !== undefined) vals.push(r.qr_025);
+    if (r.qr_975 !== undefined) vals.push(r.qr_975);
+    return vals;
+  });
   const minVal = Math.min(...prices);
   const maxVal = Math.max(...prices);
   const padding = (maxVal - minVal) * 0.1 || 50;
@@ -576,6 +592,27 @@ const currentDayPredictedPoints = computed(() => {
     const y = height - ((r.predicted_price - minPrice) / (maxPrice - minPrice)) * height;
     return `${x.toFixed(1)},${Math.max(0, Math.min(height, y)).toFixed(1)}`;
   }).join(" ");
+});
+
+const currentDayBand95Points = computed(() => {
+  const data = currentDayData.value;
+  if (data.length === 0) return "";
+  const { min: minPrice, max: maxPrice } = currentDayPriceRange.value;
+  const width = 600, height = 200;
+  const step = width / Math.max(data.length - 1, 1);
+  const upper = data.map((r, i) => {
+    const x = i * step;
+    const val = r.qr_975 ?? r.predicted_price;
+    const y = height - ((val - minPrice) / (maxPrice - minPrice)) * height;
+    return `${x.toFixed(1)},${Math.max(0, Math.min(height, y)).toFixed(1)}`;
+  });
+  const lower = data.map((r, i) => {
+    const x = i * step;
+    const val = r.qr_025 ?? r.predicted_price;
+    const y = height - ((val - minPrice) / (maxPrice - minPrice)) * height;
+    return `${x.toFixed(1)},${Math.max(0, Math.min(height, y)).toFixed(1)}`;
+  }).reverse();
+  return [...upper, ...lower].join(" ");
 });
 
 const currentDayLoadPoints = computed(() => {

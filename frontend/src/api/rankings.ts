@@ -52,6 +52,7 @@ export type RankingSummaryQuery = {
   end_time?: string;
   model_name?: string;
   rank_type?: string;
+  source?: string;
 };
 
 export const fetchRankingSummary = async (query: RankingSummaryQuery = {}) => {
