@@ -20,7 +20,7 @@ from app.schemas.dataset import DatasetCreate, DatasetOut, DatasetUpdate
 from app.services.csv_service import validate_csv_structure
 from app.services.storage_service import delete_file, save_upload_file
 from app.services.excel_service import parse_excel_file, parse_csv_file, validate_excel_structure
-from app.services.political_compliance import check_dataset_political_compliance
+
 from app.utils.pagination import paginate
 
 router = APIRouter(prefix="/datasets", tags=["datasets"])
@@ -215,13 +215,6 @@ def _verify_dataset_internal(db: Session, dataset_id: int) -> tuple[Dataset, Opt
 
     if not uploaded_records:
         return dataset, "数据集没有记录，无法校核"
-
-    is_compliant, compliance_reason = check_dataset_political_compliance(dataset, uploaded_records)
-    if not is_compliant:
-        dataset.verify_status = "校核失败"
-        db.commit()
-        db.refresh(dataset)
-        return dataset, f"政治内容校核不通过: {compliance_reason}"
 
     base_records = db.query(BasePriceData).order_by(BasePriceData.record_time).all()
     if not base_records:
