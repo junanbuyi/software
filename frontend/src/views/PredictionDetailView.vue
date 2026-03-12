@@ -44,21 +44,16 @@
       <section class="panel">
         <div class="panel-header">
           <h3 class="panel-title">模型名称</h3>
-          <button class="btn sm" @click="showModelPicker = true">选择模型</button>
         </div>
-        <div class="model-scroll">
-          <button class="scroll-btn" @click="scrollModels(-200)">◀</button>
-          <div class="model-list" ref="modelListRef">
-            <div
-              class="model-item"
-              v-for="model in models"
-              :key="model.id"
-              @click="selectModel(model.id)"
-            >
-              <span class="model-name" :class="{ active: model.selected }">{{ model.name }}</span>
-            </div>
+        <div class="model-list" ref="modelListRef">
+          <div
+            class="model-item"
+            v-for="model in models"
+            :key="model.id"
+            @click="selectModel(model.id)"
+          >
+            <span class="model-name" :class="{ active: model.selected }">{{ model.name }}</span>
           </div>
-          <button class="scroll-btn" @click="scrollModels(200)">▶</button>
         </div>
       </section>
 
@@ -191,33 +186,6 @@
       </section>
     </div>
 
-    <div v-if="showModelPicker" class="modal-overlay" @click.self="showModelPicker = false">
-      <div class="modal">
-        <div class="modal-header">
-          <h3>选择模型</h3>
-          <button class="modal-close" @click="showModelPicker = false">&times;</button>
-        </div>
-        <div class="modal-body">
-          <div v-if="models.length === 0" class="empty-row">暂无可选模型</div>
-          <div v-else class="model-picker">
-            <label v-for="model in models" :key="model.id" class="picker-item">
-              <input
-                type="radio"
-                name="model-picker"
-                :value="model.id"
-                :checked="model.selected"
-                @change="selectModel(model.id)"
-              />
-              <span>{{ model.name }}</span>
-            </label>
-          </div>
-        </div>
-        <div class="modal-footer">
-          <button class="btn" @click="showModelPicker = false">取消</button>
-          <button class="btn primary" @click="showModelPicker = false">确定</button>
-        </div>
-      </div>
-    </div>
   </MainLayout>
 </template>
 
@@ -281,7 +249,6 @@ const plan = ref<{ name: string; dataset: string; type: string; description: str
 const models = ref<{ id: number; name: string; selected: boolean }[]>([]);
 const planModelId = ref<number | null>(null);
 const currentRunId = ref<number | null>(null);
-const showModelPicker = ref(false);
 const modelListRef = ref<HTMLDivElement | null>(null);
 const availableRange = ref<{ start: string; end: string }>({ start: "", end: "" });
 
@@ -309,7 +276,7 @@ const fetchDatasetId = async () => {
       const data = await res.json();
       if (data.items && data.items.length > 0) {
         currentDatasetId.value = data.items[0].id;
-        await loadDatasetRange(currentDatasetId.value);
+        await loadDatasetRange(currentDatasetId.value || 0);
       }
     }
   } catch (e) {
@@ -584,11 +551,6 @@ const selectModel = (modelId: number) => {
       plan.value.name = current.name;
     }
   }
-};
-
-const scrollModels = (offset: number) => {
-  if (!modelListRef.value) return;
-  modelListRef.value.scrollBy({ left: offset, behavior: "smooth" });
 };
 
 const loadLatestRun = async () => {
@@ -954,10 +916,11 @@ const tcnLoadYAxisLabels = computed(() => {
 .model-list {
   padding: 16px 12px;
   display: flex;
-  flex-direction: row;
-  gap: 12px;
-  overflow-x: auto;
+  flex-direction: column;
+  gap: 8px;
+  overflow-y: auto;
   scrollbar-width: thin;
+  max-height: 300px;
 }
 .model-item {
   display: flex;
@@ -980,29 +943,6 @@ const tcnLoadYAxisLabels = computed(() => {
   color: var(--primary);
   border-color: var(--primary);
   background: rgba(24, 144, 255, 0.08);
-}
-.model-scroll {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 0 12px 12px 12px;
-}
-.scroll-btn {
-  width: 28px;
-  height: 28px;
-  border: 1px solid var(--border);
-  background: #fff;
-  border-radius: 4px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 12px;
-}
-.scroll-btn:hover {
-  background: var(--primary);
-  color: #fff;
-  border-color: var(--primary);
 }
 .period-cell {
   display: flex;
