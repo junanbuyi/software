@@ -68,7 +68,7 @@
 <script setup lang="ts">
 import { onMounted, reactive, ref } from "vue";
 import MainLayout from "../layouts/MainLayout.vue";
-import { fetchProfile, updatePassword, updateProfile } from "../api/admin";
+import { getCurrentAdmin, updatePassword, updateProfile } from "../api/admin";
 
 const profile = reactive({
   username: "",
@@ -90,7 +90,7 @@ const error = ref("");
 const loadProfile = async () => {
   error.value = "";
   try {
-    const data = await fetchProfile();
+    const data = await getCurrentAdmin();
     profile.username = data.username;
     profile.display_name = data.display_name;
     profile.created_at = data.created_at;
@@ -105,10 +105,7 @@ const saveProfile = async () => {
   error.value = "";
   loadingProfile.value = true;
   try {
-    const data = await updateProfile({
-      username: profile.username,
-      display_name: profile.display_name,
-    });
+    const data = await updateProfile(profile.username, profile.display_name);
     profile.updated_at = data.updated_at;
     message.value = "账号信息已更新";
   } catch (err) {
@@ -123,7 +120,7 @@ const savePassword = async () => {
   error.value = "";
   loadingPassword.value = true;
   try {
-    await updatePassword({ ...passwordForm });
+    await updatePassword(passwordForm.current_password, passwordForm.new_password);
     passwordForm.current_password = "";
     passwordForm.new_password = "";
     message.value = "密码已更新";
@@ -136,4 +133,3 @@ const savePassword = async () => {
 
 onMounted(loadProfile);
 </script>
-

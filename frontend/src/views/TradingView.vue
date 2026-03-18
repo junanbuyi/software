@@ -5,11 +5,14 @@
     <div v-if="g13Company" class="card">
       <!-- 调整后的顶端栏：左侧机组 + 中部日期 + 右侧按钮 -->
       <div class="card-header-row">
-        <!-- 左侧：机组标签 -->
-        <div class="tab-bar" style="margin-bottom: 0;">
-          <button v-for="u in g13Company.units" :key="u.id"
-                  :class="['tab-btn', { active: tradingUnit === u.id }]"
-                  @click="tradingUnit = u.id">机组{{ u.id.replace('Thermal_','G') }}</button>
+        <!-- 左侧：机组下拉筛选 -->
+        <div class="unit-selector">
+          <label for="unit-select">选择机组：</label>
+          <select id="unit-select" v-model="tradingUnit" class="select-input">
+            <option v-for="u in g13Company.units" :key="u.id" :value="u.id">
+              机组{{ u.id.replace('Thermal_','G') }}
+            </option>
+          </select>
         </div>
 
         <!-- 新增：中部日期标签卡 -->
@@ -35,8 +38,8 @@
       <div class="trading-grid">
         <div class="trading-left">
           <h4>电能量市场申报</h4>
-          <button class="btn outline sm" style="margin-bottom: 12px;" @click="tradingMode='bid'">选择策略报价</button>
-          <button class="btn outline sm" style="margin-left: 8px;" @click="tradingMode='clear'">市场出清</button>
+          <button class="btn outline sm" style="margin-bottom: 12px;" @click="handleStrategyQuote">选择智能报价</button>
+          <button class="btn outline sm" style="margin-left: 8px;" @click="handleMarketClear">市场出清</button>
           <div class="data-table-wrap">
             <table class="data-table">
               <thead><tr><th>分段</th><th>起始出力(MW)</th><th>终止出力(MW)</th><th>分段报价(元/MWh)</th></tr></thead>
@@ -80,48 +83,99 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from "vue";
 import { marketApi } from "../api/market";
+import { getCurrentAdmin } from "../api/admin";
 
-// 新增：日期标签配置
+// 日期标签配置 - 对应数据表中的data_date
 const dateTabs = [
-  { key: 1, label: "第一天" },
-  { key: 2, label: "第二天" },
-  { key: 3, label: "第三天" },
-  { key: 4, label: "第四天" },
-  { key: 5, label: "第五天" },
-  { key: 6, label: "第六天" },
-  { key: 7, label: "第七天" }
+  { key: "20260319", label: "第一天" },
+  { key: "20260320", label: "第二天" },
+  { key: "20260321", label: "第三天" },
+  { key: "20260322", label: "第四天" },
+  { key: "20260323", label: "第五天" },
+  { key: "20260324", label: "第六天" },
+  { key: "20260325", label: "第七天" }
 ];
-// 新增：当前选中日期（默认第一天）
-const currentDay = ref<number>(1);
+// 当前选中日期（默认第一天）
+const currentDay = ref<string>("20260319");
 
 const g13Company = ref<any>(null);
-const tradingUnit = ref("Thermal_1");
-const tradingMode = ref("bid");
+const tradingUnit = ref("");
+const tradingMode = ref("clear");
 const dayAheadQuotes = ref<any[]>([]);
 const tradingSelected = ref<any>(null);
 const customBidSegments = ref<any[]>([]);
+const currentUser = ref<any>(null);
 
-// 新增：日期切换处理方法
-const handleDayChange = (dayKey: number) => {
+// 日期切换处理方法
+const handleDayChange = (dayKey: string) => {
   currentDay.value = dayKey;
-  // 这里先保留联动逻辑框架，后端接口实现后可补充：
-  // 1. 调用接口时传递 currentDay.value 和 tradingUnit.value
-  // 2. 重新初始化报价数据
-  initCustomBidSegments();
+  // 重新获取数据并初始化报价分段
+  fetchInputDayAheadQuotes();
 };
+
+// 选择策略报价处理方法
+const handleStrategyQuote = () => {
+  tradingMode.value = 'bid';
+  // 重新获取数据并初始化报价分段
+  fetchInputDayAheadQuotes();
+};
+
+// 市场出清处理方法
+const handleMarketClear = () => {
+  tradingMode.value = 'clear';
+  // 重新获取数据并初始化报价分段
+  fetchInputDayAheadQuotes();
+};
+
+async function fetchCurrentUser() {
+  try {
+    const user = await getCurrentAdmin();
+    currentUser.value = user;
+    console.log("当前用户:", user);
+    return user;
+  } catch (e) {
+    console.error("获取用户信息失败", e);
+    return null;
+  }
+}
 
 async function fetchG13Company() {
   try {
+    const user = await fetchCurrentUser();
+    if (!user) {
+      return;
+    }
+    
     const { data } = await marketApi.getCompanies();
     const companies = data.items || [];
-    // 查找G13企业（通过名称）
-    g13Company.value = companies.find((c: any) => c.name === "G13") || null;
+    // 根据用户的用户名查找对应的企业（假设用户名为企业代码，如 G13）
+    const companyCode = user.username;
+    g13Company.value = companies.find((c: any) => c.name === companyCode) || null;
     if (g13Company.value && g13Company.value.units.length > 0) {
       // 设置默认机组
       tradingUnit.value = g13Company.value.units[0].id;
     }
   } catch (e) { 
     console.error("获取企业信息失败", e); 
+  }
+}
+
+async function fetchInputDayAheadQuotes() {
+  try {
+    const params: any = { 
+      data_date: currentDay.value,
+      use_default_case: tradingMode.value !== 'bid' // 未点击策略报价按钮时使用默认case
+    };
+    if (tradingUnit.value) {
+      params.unit_id = tradingUnit.value;
+    }
+    const da = await marketApi.getInputDayAheadQuotes(params);
+    // 标准化API响应数据格式
+    dayAheadQuotes.value = normalizeQuoteData(da.data.items || []);
+    // 初始化自定义报价数据
+    initCustomBidSegments();
+  } catch (e) { 
+    console.error("获取输入交易数据失败", e); 
   }
 }
 
@@ -138,8 +192,11 @@ async function fetchTradingData() {
 
 async function refreshData() {
   await fetchG13Company();
-  // 重置表单数据为0
-  resetFormData();
+  // 切换到市场出清模式，使用Input0 case_id
+  tradingMode.value = 'clear';
+  // 重新获取数据
+  await fetchInputDayAheadQuotes();
+  // 不需要重置表单数据，因为fetchInputDayAheadQuotes会自动初始化customBidSegments
 }
 
 function resetFormData() {
@@ -153,33 +210,95 @@ function resetFormData() {
 }
 
 function initCustomBidSegments() {
+  // 过滤当前机组和当前日期的数据
   const filtered = dayAheadQuotes.value.filter(
-    (q: any) => q.unit_id === tradingUnit.value && q.quote_time === 1
-    // 后端实现后可添加日期筛选条件：
-    // && q.quote_day === currentDay.value
+    (q: any) => q.unit_id === tradingUnit.value
   );
-  let cumQty = 0;
-  const segments = filtered.map((q: any, i: number) => {
-    const start = cumQty;
-    cumQty += q.quote_quantity;
-    return { seg: i + 1, start, end: cumQty, price: q.quote_price };
+  
+  // 按照quote_time和quote_section排序（提取数字部分进行数值排序）
+  const sortedQuotes = filtered.sort((a: any, b: any) => {
+    if (a.quote_time !== b.quote_time) {
+      return a.quote_time - b.quote_time;
+    }
+    // 提取quote_section中的数字部分进行数值排序
+    const getSectionNum = (section: string) => {
+      const match = section.match(/\d+/);
+      return match ? parseInt(match[0], 10) : 0;
+    };
+    return getSectionNum(a.quote_section) - getSectionNum(b.quote_section);
   });
+  
+  // 第一阶段的起始出力固定为0，每个阶段的QuoteCapacity值为终止出力减去起始出力
+  let currentOutput = 0;
+  const segments = sortedQuotes.map((q: any, i: number) => {
+    const start = currentOutput;
+    const end = start + q.quote_capacity;
+    currentOutput = end;
+    return { 
+      seg: i + 1, 
+      start, 
+      end, 
+      price: q.quote_price,
+      quote_capacity: q.quote_capacity,
+      quote_section: q.quote_section,
+      quote_time: q.quote_time
+    };
+  });
+  
   customBidSegments.value = segments;
+}
+
+// 检查API响应格式并转换为前端需要的格式
+function normalizeQuoteData(quotes: any[]) {
+  return quotes.map(quote => {
+    // 处理可能的字段名差异（PascalCase vs snake_case）
+    return {
+      quote_id: quote.quote_id || quote.QuoteId,
+      unit_id: quote.unit_id || quote.UnitId,
+      market_name: quote.market_name || quote.MarketName,
+      quote_time: quote.quote_time || quote.QuoteTime,
+      quote_section: quote.quote_section || quote.QuoteSection,
+      quote_price: quote.quote_price || quote.QuotePrice,
+      quote_capacity: quote.quote_capacity || quote.QuoteCapacity,
+      is_used: quote.is_used || quote.IsUsed,
+      case_id: quote.case_id,
+      data_date: quote.data_date
+    };
+  });
 }
 
 const bidSegments = computed(() => {
   return customBidSegments.value;
 });
 
-// 监听交易单位变化，重新初始化数据（保留日期）
+// 监听交易单位变化，重新获取数据
 watch(tradingUnit, () => {
-  initCustomBidSegments();
+  fetchInputDayAheadQuotes();
 });
 
-// 新增：监听日期变化时打印日志（后端实现后可替换为真实逻辑）
+// 监听日期变化，重新获取数据
 watch(currentDay, () => {
-  console.log(`切换到${currentDay.value}天，当前机组：${tradingUnit.value}`);
+  fetchInputDayAheadQuotes();
 });
+
+// 监听 customBidSegments 变化，保证分段出力的连续性
+watch(customBidSegments, (newSegments) => {
+  // 遍历所有分段，检查并调整相邻分段的出力值
+  for (let i = 0; i < newSegments.length; i++) {
+    if (i > 0) {
+      // 当前分段的起始出力必须等于前一段的终止出力
+      if (newSegments[i].start !== newSegments[i - 1].end) {
+        newSegments[i].start = newSegments[i - 1].end;
+      }
+    }
+    if (i < newSegments.length - 1) {
+      // 下一段的起始出力必须等于当前段的终止出力
+      if (newSegments[i + 1].start !== newSegments[i].end) {
+        newSegments[i + 1].start = newSegments[i].end;
+      }
+    }
+  }
+}, { deep: true });
 
 const bidCurveMaxOutput = computed(() => {
   const segs = bidSegments.value;
@@ -230,8 +349,10 @@ const bidYLabels = computed(() => {
 });
 
 onMounted(() => {
-  fetchG13Company();
-  fetchTradingData();
+  fetchG13Company().then(() => {
+    // 确保机组信息加载完成后，再获取报价数据
+    fetchInputDayAheadQuotes();
+  });
 });
 </script>
 
@@ -278,6 +399,37 @@ onMounted(() => {
   gap: 0;
   margin-bottom: 16px;
   height: 36px; /* 统一高度 */
+}
+
+.unit-selector {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 36px;
+}
+
+.unit-selector label {
+  font-size: 14px;
+  color: #333;
+  font-weight: 500;
+}
+
+.select-input {
+  padding: 6px 12px;
+  border: 1px solid #d9d9d9;
+  border-radius: 4px;
+  font-size: 14px;
+  color: #333;
+  background: #fff;
+  transition: all 0.2s;
+  height: 100%;
+  box-sizing: border-box;
+}
+
+.select-input:focus {
+  outline: none;
+  border-color: #1890ff;
+  box-shadow: 0 0 0 2px rgba(24, 144, 255, 0.2);
 }
 .tab-btn {
   padding: 8px 20px;

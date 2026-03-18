@@ -1,3 +1,4 @@
+
 <template>
   <div class="content-section">
     <!-- 调整后的顶部栏：左侧Tab + 右侧日期标签 -->
@@ -22,79 +23,95 @@
 
     <!-- 市场总览 -->
     <div v-if="settlementTab === 'overview'">
+      <!-- 调试信息（已注释）
+      <div style="background: #f0f0f0; padding: 10px; margin-bottom: 10px; font-size: 12px; border: 1px solid #ddd;">
+        <strong>[调试]</strong> settlementTab: {{ settlementTab }}<br>
+        <strong>[调试]</strong> overviewData 是否存在：{{ !!overviewData }}<br>
+        <strong>[调试]</strong> overviewData 类型：{{ typeof overviewData }}<br>
+        <strong>[调试]</strong> energy_market 是否存在：{{ !!overviewData?.energy_market }}<br>
+        <strong>[调试]</strong> energy_market 类型：{{ typeof overviewData?.energy_market }}<br>
+        <strong>[调试]</strong> avg_price 值：{{ overviewData?.energy_market?.avg_price }}<br>
+        <strong>[调试]</strong> avg_price 是否为空：{{ !overviewData?.energy_market?.avg_price }}<br>
+        <strong>[调试]</strong> total_generation 值：{{ overviewData?.energy_market?.total_generation }}<br>
+        <strong>[调试]</strong> 完整 energy_market: {{ JSON.stringify(overviewData?.energy_market) }}<br>
+        <strong>[调试]</strong> overviewData.energy_market.avg_price: {{ overviewData?.energy_market?.avg_price }}<br>
+        <strong>[调试]</strong> 直接访问 avg_price: {{ (overviewData as any)?.energy_market?.avg_price }}
+      </div>
+      -->
+      
       <div class="card">
         <div class="card-header-row">
           <!-- 标题随日期变化 -->
           <h3 class="card-title">{{ currentDayLabel }} 电能量市场结果</h3>
-          <span class="score-badge">评分：80</span>
+          <!-- <span class="score-badge">评分：80</span> -->
         </div>
         <div class="market-results">
           <!-- 第一行：电价相关 -->
           <div class="result-row row-1">
             <div class="result-item">
-              <div class="result-value">{{ overviewData.energy_market.avg_price || 0 }}</div>
+              <div class="result-value">{{ formatNumber(overviewData.energy_market.avg_price) }}</div>
               <div class="result-label">成交均价(元/MWh)</div>
             </div>
             <div class="result-item">
-              <div class="result-value">{{ overviewData.energy_market.max_node_price || 0 }}</div>
+              <div class="result-value">{{ formatNumber(overviewData.energy_market.max_node_price) }}</div>
               <div class="result-label">最高节点电价(元/MWh)</div>
             </div>
             <div class="result-item">
-              <div class="result-value">{{ overviewData.energy_market.min_node_price || 0 }}</div>
+              <div class="result-value">{{ formatNumber(overviewData.energy_market.min_node_price) }}</div>
               <div class="result-label">最低节点电价(元/MWh)</div>
             </div>
             <div class="result-item">
-              <div class="result-value">{{ overviewData.energy_market.avg_quote_price || 0 }}</div>
+              <div class="result-value">{{ formatNumber(overviewData.energy_market.avg_quote_price) }}</div>
               <div class="result-label">申报均价(元/MWh)</div>
             </div>
             <div class="result-item">
-              <div class="result-value">{{ overviewData.energy_market.supply_demand_ratio || 0 }}</div>
+              <div class="result-value">{{ formatNumber(overviewData.energy_market.supply_demand_ratio) }}</div>
               <div class="result-label">供需比</div>
             </div>
           </div>
           <!-- 第二行：电量相关 -->
           <div class="result-row row-2">
             <div class="result-item">
-              <div class="result-value">{{ overviewData.energy_market.total_generation || 0 }}</div>
+              <div class="result-value">{{ formatNumber(overviewData.energy_market.total_generation) }}</div>
               <div class="result-label">总发电量(MWh)</div>
             </div>
             <div class="result-item">
-              <div class="result-value">{{ overviewData.energy_market.total_consumption || 0 }}</div>
+              <div class="result-value">{{ formatNumber(overviewData.energy_market.total_consumption) }}</div>
               <div class="result-label">总用电量(MWh)</div>
             </div>
             <div class="result-item">
-              <div class="result-value">{{ overviewData.energy_market.re_curtailment || 0 }}</div>
+              <div class="result-value">{{ formatNumber(overviewData.energy_market.re_curtailment) }}</div>
               <div class="result-label">新能源总弃电量(MWh)</div>
             </div>
             <div class="result-item">
-              <div class="result-value">{{ overviewData.energy_market.quote_quantity || 0 }}</div>
+              <div class="result-value">{{ formatNumber(overviewData.energy_market.quote_quantity) }}</div>
               <div class="result-label">申报出力(MW)</div>
             </div>
             <div class="result-item">
-              <div class="result-value">{{ overviewData.energy_market.total_output || 0 }}</div>
+              <div class="result-value">{{ formatNumber(overviewData.energy_market.total_output) }}</div>
               <div class="result-label">成交总出力(100MW)</div>
             </div>
           </div>
           <!-- 第三行：其他指标 -->
           <div class="result-row row-3">
             <div class="result-item">
-              <div class="result-value">{{ overviewData.energy_market.total_capacity || 0 }}</div>
+              <div class="result-value">{{ formatNumber(overviewData.energy_market.total_capacity) }}</div>
               <div class="result-label">总装机容量(100MW)</div>
             </div>
             <div class="result-item">
-              <div class="result-value">{{ overviewData.energy_market.plant_count || 0 }}</div>
+              <div class="result-value">{{ formatNumber(overviewData.energy_market.plant_count) }}</div>
               <div class="result-label">发电企业数目</div>
             </div>
             <div class="result-item">
-              <div class="result-value">{{ overviewData.energy_market.quote_unit_count || 0 }}</div>
+              <div class="result-value">{{ formatNumber(overviewData.energy_market.quote_unit_count) }}</div>
               <div class="result-label">申报机组数目</div>
             </div>
             <div class="result-item">
-              <div class="result-value">{{ overviewData.energy_market.bid_units || 0 }}</div>
+              <div class="result-value">{{ formatNumber(overviewData.energy_market.bid_units) }}</div>
               <div class="result-label">中标机组数目</div>
             </div>
             <div class="result-item">
-              <div class="result-value">{{ overviewData.energy_market.total_revenue || 0 }}</div>
+              <div class="result-value">{{ formatNumber(overviewData.energy_market.total_revenue) }}</div>
               <div class="result-label">总交易额(万元)</div>
             </div>
           </div>
@@ -190,47 +207,49 @@
       <div class="card">
         <!-- 标题随日期变化 -->
         <h3 class="card-title">{{ currentDayLabel }} 公司中标结果</h3>
-        <!-- G13企业中标结果 -->
+        <!-- 企业中标结果 - 标签数据格式（两行，每行四个） -->
         <div v-if="g13SettlementData" class="g13-settlement-results">
+          <!-- 第一行：成本相关 -->
           <div class="result-row row-4">
             <div class="result-item">
               <div class="result-label">火电厂名称</div>
               <div class="result-value">{{ g13SettlementData.name || 'G13' }}</div>
             </div>
             <div class="result-item">
-              <div class="result-label">运行成本(万元)</div>
-              <div class="result-value">{{ g13SettlementData.opCost || 0 }}</div>
+              <div class="result-label">运行成本 (万元)</div>
+              <div class="result-value">{{ formatNumber(g13SettlementData.opCost) }}</div>
             </div>
             <div class="result-item">
-              <div class="result-label">开机成本(万元)</div>
-              <div class="result-value">{{ g13SettlementData.startCost || 0 }}</div>
+              <div class="result-label">开机成本 (万元)</div>
+              <div class="result-value">{{ formatNumber(g13SettlementData.startCost) }}</div>
             </div>
             <div class="result-item">
-              <div class="result-label">关机成本(万元)</div>
-              <div class="result-value">{{ g13SettlementData.stopCost || 0 }}</div>
+              <div class="result-label">关机成本 (万元)</div>
+              <div class="result-value">{{ formatNumber(g13SettlementData.stopCost) }}</div>
             </div>
           </div>
+          <!-- 第二行：出力与收益相关 -->
           <div class="result-row row-4">
             <div class="result-item">
-              <div class="result-label">总中标出力(MW)</div>
-              <div class="result-value">{{ g13SettlementData.output || 0 }}</div>
+              <div class="result-label">总中标出力 (MW)</div>
+              <div class="result-value">{{ formatNumber(g13SettlementData.output) }}</div>
             </div>
             <div class="result-item">
-              <div class="result-label">中标电量均价(元/MWh)</div>
-              <div class="result-value">{{ g13SettlementData.avgPrice || 0 }}</div>
+              <div class="result-label">中标电量均价 (元/MWh)</div>
+              <div class="result-value">{{ formatNumber(g13SettlementData.avgPrice) }}</div>
             </div>
             <div class="result-item">
-              <div class="result-label">总中标收益(万元)</div>
-              <div class="result-value">{{ g13SettlementData.revenue || 0 }}</div>
+              <div class="result-label">总中标收益 (万元)</div>
+              <div class="result-value">{{ formatNumber(g13SettlementData.revenue) }}</div>
             </div>
             <div class="result-item">
-              <div class="result-label">净收益(万元)</div>
-              <div class="result-value">{{ g13SettlementData.netIncome || 0 }}</div>
+              <div class="result-label">净收益 (万元)</div>
+              <div class="result-value">{{ formatNumber(g13SettlementData.netIncome) }}</div>
             </div>
           </div>
         </div>
         <div v-else class="no-data">
-          <p>暂无G13企业的中标结果数据</p>
+          <p>暂无企业的中标结果数据</p>
         </div>
       </div>
 
@@ -245,39 +264,41 @@
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
               <h3 class="card-title" style="margin: 0;">中标出力与均价</h3>
               <select 
-                v-model="selectedUnitIndex" 
+                v-model="selectedUnitId" 
                 style="padding: 4px 8px; border: 1px solid #d9d9d9; border-radius: 4px; font-size: 12px; color: #333;"
-                :disabled="!historyEnergyDetail.length"
+                :disabled="!currentCompany || !currentCompany.units || currentCompany.units.length === 0"
               >
                 <option 
-                  v-for="(row, idx) in historyEnergyDetail.slice(0, 8)" 
-                  :key="`unit-option-${idx}`"
-                  :value="idx"
+                  v-for="unit in currentCompany?.units || []" 
+                  :key="unit.id"
+                  :value="unit.id"
                 >
-                  Thermal_{{ Number(row.row_index) + 1 }}
+                  机组{{ unit.id.replace('Thermal_', '') }}
                 </option>
               </select>
             </div>
             <div class="svg-chart-wrap">
-              <svg viewBox="0 0 700 220" class="svg-chart">
-                <!-- 左侧Y轴 -->
-                <line x1="50" y1="10" x2="50" y2="200" stroke="#e0e0e0" stroke-width="1"/>
-                <!-- 右侧Y轴（副坐标轴） -->
-                <line x1="690" y1="10" x2="690" y2="200" stroke="#e0e0e0" stroke-width="1"/>
-                <!-- X轴 -->
-                <line x1="50" y1="200" x2="690" y2="200" stroke="#e0e0e0" stroke-width="1"/>
-                <!-- 左侧Y轴标签（出力） -->
-                <text x="50" y="10" font-size="10" fill="#1890ff" text-anchor="middle">出力(MW)</text>
-                <text v-for="(v, i) in barYLabels.slice(0, 4)" :key="'left-'+i" :x="45" :y="200 - i * 60 + 4" text-anchor="end" font-size="11" fill="#1890ff">{{ v }}</text>
-                <!-- 右侧Y轴标签（均价） -->
-                <text x="690" y="10" font-size="10" fill="#faad14" text-anchor="middle">均价(元/MWh)</text>
-                <text v-for="(v, i) in priceYLabels.slice(0, 4)" :key="'right-'+i" :x="695" :y="200 - i * 60 + 4" text-anchor="start" font-size="11" fill="#faad14">{{ v }}</text>
+              <svg viewBox="0 0 750 220" class="svg-chart">
+                <!-- 左侧 Y 轴 -->
+                <line x1="80" y1="10" x2="80" y2="200" stroke="#e0e0e0" stroke-width="1"/>
+                <!-- 右侧 Y 轴（副坐标轴） -->
+                <line x1="720" y1="10" x2="720" y2="200" stroke="#e0e0e0" stroke-width="1"/>
+                <!-- X 轴 -->
+                <line x1="80" y1="200" x2="720" y2="200" stroke="#e0e0e0" stroke-width="1"/>
+                <!-- 左侧 Y 轴标签（出力） -->
+                <text x="80" y="10" font-size="10" fill="#1890ff" text-anchor="middle">出力 (MW)</text>
+                <!-- Y 轴刻度标签 - 显示全部 6 个刻度 (5 等分) -->
+                <text v-for="(v, i) in barYLabels" :key="'left-'+i" :x="75" :y="200 - i * 36 + 4" text-anchor="end" font-size="11" fill="#1890ff">{{ v }}</text>
+                <!-- 右侧 Y 轴标签（均价） -->
+                <text x="720" y="10" font-size="10" fill="#faad14" text-anchor="middle">均价 (元/MWh)</text>
+                <!-- Y 轴刻度标签 - 显示在右侧 Y 轴右边 (5 等分) -->
+                <text v-for="(v, i) in priceYLabels" :key="'right-'+i" :x="725" :y="200 - i * 36 + 4" text-anchor="start" font-size="11" fill="#faad14">{{ v }}</text>
                 <!-- 中标出力折线 -->
                 <polyline v-if="outputLinePath" :points="outputLinePath" fill="none" stroke="#1890ff" stroke-width="2"/>
                 <!-- 中标均价折线（副坐标轴） -->
                 <polyline v-if="priceLinePathDual" :points="priceLinePathDual" fill="none" stroke="#faad14" stroke-width="2"/>
                 <!-- 图例 -->
-                <g transform="translate(300, 10)">
+                <g transform="translate(330, 10)">
                   <line x1="0" y1="4" x2="20" y2="4" stroke="#1890ff" stroke-width="2"/>
                   <text x="25" y="8" font-size="10" fill="#666">中标出力</text>
                   <line x1="80" y1="4" x2="100" y2="4" stroke="#faad14" stroke-width="2"/>
@@ -285,8 +306,8 @@
                 </g>
                 
                 <template v-for="i in maxPeriods" :key="'x-output-'+i">
-                  <text v-if="i % 8 === 0" :x="50 + (i - 0.5) * 6.67" y="218" text-anchor="middle" font-size="9" fill="#666">{{ i }}</text>
-                  <line :x1="50 + i * 6.67" :y1="200" :x2="50 + i * 6.67" :y2="205" stroke="#e0e0e0" stroke-width="1"/>
+                  <text v-if="i % 8 === 0" :x="80 + (i - 0.5) * 6.67" y="218" text-anchor="middle" font-size="9" fill="#666">{{ i }}</text>
+                  <line :x1="80 + i * 6.67" :y1="200" :x2="80 + i * 6.67" :y2="205" stroke="#e0e0e0" stroke-width="1"/>
                 </template>
               </svg>
             </div>
@@ -296,16 +317,17 @@
           <div class="card" style="margin-top: 20px;">
             <h3 class="card-title">中标收益</h3>
             <div class="svg-chart-wrap">
-              <svg viewBox="0 0 700 220" class="svg-chart">
-                <line x1="50" y1="10" x2="50" y2="200" stroke="#e0e0e0" stroke-width="1"/>
-                <line x1="50" y1="200" x2="690" y2="200" stroke="#e0e0e0" stroke-width="1"/>
-                <text x="50" y="10" font-size="10" fill="#666" text-anchor="middle">收益(元)</text>
-                <text v-for="(v, i) in revenueYLabels.slice(0, 4)" :key="i" :x="45" :y="200 - i * 60 + 4" text-anchor="end" font-size="11" fill="#999">{{ v }}</text>
+              <svg viewBox="0 0 750 220" class="svg-chart">
+                <line x1="80" y1="10" x2="80" y2="200" stroke="#e0e0e0" stroke-width="1"/>
+                <line x1="80" y1="200" x2="720" y2="200" stroke="#e0e0e0" stroke-width="1"/>
+                <text x="80" y="10" font-size="10" fill="#666" text-anchor="middle">收益 (元)</text>
+                <!-- Y 轴刻度标签 - 显示全部 6 个刻度 (5 等分) -->
+                <text v-for="(v, i) in revenueYLabels" :key="i" :x="75" :y="200 - i * 36 + 4" text-anchor="end" font-size="11" fill="#999">{{ v }}</text>
                 <polyline v-if="revenueLinePath" :points="revenueLinePath" fill="none" stroke="#52c41a" stroke-width="2"/>
                 
                 <template v-for="i in maxPeriods" :key="'x-revenue-'+i">
-                  <text v-if="i % 8 === 0" :x="50 + (i - 0.5) * 6.67" y="218" text-anchor="middle" font-size="9" fill="#666">{{ i }}</text>
-                  <line :x1="50 + i * 6.67" :y1="200" :x2="50 + i * 6.67" :y2="205" stroke="#e0e0e0" stroke-width="1"/>
+                  <text v-if="i % 8 === 0" :x="80 + (i - 0.5) * 6.67" y="218" text-anchor="middle" font-size="9" fill="#666">{{ i }}</text>
+                  <line :x1="80 + i * 6.67" :y1="200" :x2="80 + i * 6.67" :y2="205" stroke="#e0e0e0" stroke-width="1"/>
                 </template>
               </svg>
             </div>
@@ -317,8 +339,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from "vue";
+import { ref, computed, onMounted, nextTick, watch } from "vue";
 import { marketApi } from "../api/market";
+import { getCurrentAdmin } from "../api/admin";
 
 // 定义类型接口 - 解决any类型问题
 interface HistoryEnergyItem {
@@ -346,61 +369,73 @@ const barColors = [
   "#52c41a", "#13c2c2", "#eb2f96", "#fadb14"
 ];
 
-// 选中机组索引（响应式）
-const selectedUnitIndex = ref<number>(0);
+// 选中机组ID（响应式）
+const selectedUnitId = ref<string>("");
 
-// 最大时段数（基于选中机组）
+// 最大时段数（基于中标出力数据）
 const maxPeriods = computed<number>(() => {
-  return selectedUnitData.value?.values?.length || 96;
+  return unitBidOutputValues.value.length || 96;
 });
 
-// 最大出力值（基于选中机组）
+// 中标出力最大值计算 - 根据实际数据动态调整 (5 等分刻度)
 const maxOutput = computed<number>(() => {
-  if (!selectedUnitData.value) return 1;
-  let max = 1;
-  selectedUnitData.value.values.forEach((v: any) => {
-    const numVal = Number(v);
-    if (!isNaN(numVal) && numVal > max) max = numVal;
+  if (!unitBidOutputValues.value.length) return 500; // 合理默认值
+  let max = 0;
+  unitBidOutputValues.value.forEach((v) => {
+    if (v > max) max = v;
   });
-  return max;
-});
-
-// Y轴刻度标签
-const barYLabels = computed<number[]>(() => {
-  const max = maxOutput.value;
-  return [0, Math.round(max / 4), Math.round(max / 2), Math.round(max * 3 / 4), Math.round(max)];
-});
-
-// 获取选中机组数据
-const selectedUnitData = computed((): HistoryEnergyItem | null => {
-  if (historyEnergyDetail.value.length === 0) return null;
-  return historyEnergyDetail.value.slice(0, 8)[selectedUnitIndex.value] || null;
-});
-
-// 中标均价（电能量市场出清电价）相关计算
-const maxPrice = computed<number>(() => {
-  if (!energyPriceData.value.length) return 1000;
-  let max = 1000;
-  energyPriceData.value.forEach((v: any) => {
-    const numVal = Number(v);
-    if (!isNaN(numVal) && numVal > max) max = numVal;
-  });
+  if (max === 0) return 500;
+  // 向上取整到百位
   return Math.ceil(max / 100) * 100;
 });
 
-// 中标均价Y轴刻度标签
-const priceYLabels = computed<number[]>(() => {
-  const max = maxPrice.value;
-  return [0, Math.round(max / 4), Math.round(max / 2), Math.round(max * 3 / 4), max];
+// 中标出力 Y 轴刻度标签 - 5 等分
+const barYLabels = computed<number[]>(() => {
+  const max = maxOutput.value;
+  const step = max / 5;
+  return [
+    0,
+    Math.round(step),
+    Math.round(step * 2),
+    Math.round(step * 3),
+    Math.round(step * 4),
+    max
+  ];
 });
 
-// 中标均价副坐标轴路径（与出力共用X轴，但使用右侧Y轴比例）
+// 中标均价最大值计算 - 根据实际数据动态调整 (5 等分刻度)
+const maxPrice = computed<number>(() => {
+  if (!unitBidPriceValues.value.length) return 300; // 降低默认值到合理范围
+  let max = 0;
+  unitBidPriceValues.value.forEach((v) => {
+    if (v > max) max = v;
+  });
+  if (max === 0) return 300;
+  // 向上取整到百位
+  return Math.ceil(max / 100) * 100;
+});
+
+// 中标均价 Y 轴刻度标签 - 5 等分
+const priceYLabels = computed<number[]>(() => {
+  const max = maxPrice.value;
+  const step = max / 5;
+  return [
+    0,
+    Math.round(step),
+    Math.round(step * 2),
+    Math.round(step * 3),
+    Math.round(step * 4),
+    max
+  ];
+});
+
+// 中标均价折线路径（副坐标轴，与出力共用 X 轴）
 const priceLinePathDual = computed<string>(() => {
-  if (!energyPriceData.value.length) return "";
+  if (!unitBidPriceValues.value.length) return "";
   const maxVal = maxPrice.value || 1;
-  const points = energyPriceData.value.map((value, idx) => {
-    const x = 50 + idx * 6.67;
-    const y = 200 - (Number(value) / maxVal) * 180;
+  const points = unitBidPriceValues.value.map((value, idx) => {
+    const x = 80 + idx * 6.67;  // 从 80 开始
+    const y = 200 - (value / maxVal) * 180;
     return `${x.toFixed(1)},${y.toFixed(1)}`;
   });
   return points.join(" ");
@@ -408,11 +443,11 @@ const priceLinePathDual = computed<string>(() => {
 
 // 中标出力折线路径
 const outputLinePath = computed<string>(() => {
-  if (!selectedUnitData.value || !selectedUnitData.value.values.length) return "";
+  if (!unitBidOutputValues.value.length) return "";
   const maxVal = maxOutput.value || 1;
-  const points = selectedUnitData.value.values.map((value: any, idx: number) => {
-    const x = 50 + idx * 6.67;
-    const y = 200 - (Number(value) / maxVal) * 180;
+  const points = unitBidOutputValues.value.map((value, idx) => {
+    const x = 80 + idx * 6.67;  // 从 80 开始
+    const y = 200 - (value / maxVal) * 180;
     return `${x.toFixed(1)},${y.toFixed(1)}`;
   });
   return points.join(" ");
@@ -420,42 +455,46 @@ const outputLinePath = computed<string>(() => {
 
 // 中标收益折线路径
 const revenueLinePath = computed<string>(() => {
-  if (!revenueData.value.length) return "";
+  if (!unitBidRevenueValues.value.length) return "";
   const maxVal = maxRevenue.value || 1;
-  const points = revenueData.value.map((value, idx) => {
-    const x = 50 + idx * 6.67;
-    const y = 200 - (Number(value) / maxVal) * 180;
+  const points = unitBidRevenueValues.value.map((value, idx) => {
+    const x = 80 + idx * 6.67;  // 从 80 开始
+    const y = 200 - (value / maxVal) * 180;
     return `${x.toFixed(1)},${y.toFixed(1)}`;
   });
   return points.join(" ");
 });
 
-// 中标收益相关计算
+// 中标收益相关计算 - 直接使用 API 返回的收益数据
 const revenueData = computed<number[]>(() => {
-  const output = selectedUnitData.value;
-  const prices = energyPriceData.value;
-  if (!output || !output.values || !prices.length) return [];
-  return output.values.map((v: any, i: number) => {
-    const outputVal = Number(v) || 0;
-    const priceVal = Number(prices[i]) || 0;
-    return outputVal * priceVal;
-  });
+  return unitBidRevenueValues.value;
 });
 
+// 中标收益最大值计算 - 根据实际数据动态调整 (增加 15% 余量)
 const maxRevenue = computed<number>(() => {
-  if (!revenueData.value.length) return 1000;
-  let max = 1000;
-  revenueData.value.forEach((v) => {
-    const numVal = Number(v);
-    if (!isNaN(numVal) && numVal > max) max = numVal;
+  if (!unitBidRevenueValues.value.length) return 40000; // 提高默认值以覆盖更大数据范围
+  let max = 0;
+  unitBidRevenueValues.value.forEach((v) => {
+    if (v > max) max = v;
   });
-  return Math.ceil(max / 100) * 100;
+  if (max === 0) return 40000;
+  // 向上取整到千位，并增加 15% 余量
+  const withMargin = max * 1.15;
+  return Math.ceil(withMargin / 1000) * 1000;
 });
 
-// 中标收益Y轴刻度标签
+// 中标收益 Y 轴刻度标签 - 5 等分
 const revenueYLabels = computed<number[]>(() => {
   const max = maxRevenue.value;
-  return [0, Math.round(max / 4), Math.round(max / 2), Math.round(max * 3 / 4), max];
+  const step = max / 5;
+  return [
+    0,
+    Math.round(step),
+    Math.round(step * 2),
+    Math.round(step * 3),
+    Math.round(step * 4),
+    max
+  ];
 });
 
 // 饼状图数据
@@ -525,17 +564,24 @@ const countArcs = computed(() => pieArcs(countPieData.value));
 // 装机容量饼图
 const capacityArcs = computed(() => pieArcs(capacityPieData.value));
 
-// 平衡图表最大Y值
+// 平衡图表最大 Y 值
 const balanceMaxY = computed(() => {
+  const bc = balanceChart.value || {};
+  const thermal = bc.thermal || [];
+  const load = bc.load || [];
+  const wind = bc.wind || [];
+  const solar = bc.solar || [];
+  const hydro = bc.hydro || [];
+  
   const all = [
-    ...balanceChart.value.thermal,
-    ...balanceChart.value.load,
-    ...(balanceChart.value.thermal.map((v: number, i: number) => v + (balanceChart.value.wind[i] || 0) + (balanceChart.value.solar[i] || 0) + (balanceChart.value.hydro[i] || 0))),
+    ...thermal,
+    ...load,
+    ...(thermal.map((v: number, i: number) => v + (wind[i] || 0) + (solar[i] || 0) + (hydro[i] || 0))),
   ];
   return Math.max(...all, 1);
 });
 
-// 平衡图表Y坐标转换
+// 平衡图表 Y 坐标转换
 const toBalanceY = (v: number) => {
   const max = balanceMaxY.value;
   return 230 - (v / max) * 210;
@@ -543,7 +589,7 @@ const toBalanceY = (v: number) => {
 
 // 火电区域坐标
 const balanceAreaPoints = computed(() => {
-  const data = balanceChart.value.thermal;
+  const data = balanceChart.value?.thermal || [];
   if (!data.length) return "";
   const n = data.length;
   const step = 640 / (n - 1);
@@ -554,8 +600,8 @@ const balanceAreaPoints = computed(() => {
 
 // 风电区域坐标
 const windAreaPoints = computed(() => {
-  const thermal = balanceChart.value.thermal;
-  const wind = balanceChart.value.wind;
+  const thermal = balanceChart.value?.thermal || [];
+  const wind = balanceChart.value?.wind || [];
   if (!thermal.length || !wind.length) return "";
   const n = thermal.length;
   const step = 640 / (n - 1);
@@ -566,9 +612,9 @@ const windAreaPoints = computed(() => {
 
 // 光伏区域坐标
 const solarAreaPoints = computed(() => {
-  const thermal = balanceChart.value.thermal;
-  const wind = balanceChart.value.wind;
-  const solar = balanceChart.value.solar;
+  const thermal = balanceChart.value?.thermal || [];
+  const wind = balanceChart.value?.wind || [];
+  const solar = balanceChart.value?.solar || [];
   if (!thermal.length || !wind.length || !solar.length) return "";
   const n = thermal.length;
   const step = 640 / (n - 1);
@@ -579,10 +625,10 @@ const solarAreaPoints = computed(() => {
 
 // 水电区域坐标
 const hydroAreaPoints = computed(() => {
-  const thermal = balanceChart.value.thermal;
-  const wind = balanceChart.value.wind;
-  const solar = balanceChart.value.solar;
-  const hydro = balanceChart.value.hydro;
+  const thermal = balanceChart.value?.thermal || [];
+  const wind = balanceChart.value?.wind || [];
+  const solar = balanceChart.value?.solar || [];
+  const hydro = balanceChart.value?.hydro || [];
   if (!thermal.length || !wind.length || !solar.length || !hydro.length) return "";
   const n = thermal.length;
   const step = 640 / (n - 1);
@@ -593,7 +639,7 @@ const hydroAreaPoints = computed(() => {
 
 // 负荷线坐标
 const loadLinePoints = computed(() => {
-  const data = balanceChart.value.load;
+  const data = balanceChart.value?.load || [];
   if (!data.length) return "";
   const n = data.length;
   const step = 640 / (n - 1);
@@ -635,6 +681,13 @@ const g13SettlementData = ref<any>(null);
 const historyEnergyDetail = ref<HistoryEnergyItem[]>([]); // 修复：指定具体类型
 const balanceChart = ref<BalanceChartData>({ thermal: [], wind: [], solar: [], hydro: [], load: [], periods: 96 });
 const energyPriceData = ref<number[]>([]);
+// 理性申报：机组中标数据（使用 Output0）
+const unitBidOutputValues = ref<number[]>([]);
+const unitBidPriceValues = ref<number[]>([]);
+const unitBidRevenueValues = ref<number[]>([]);
+const unitBidLoading = ref<boolean>(false);
+const currentUser = ref<any>(null);
+const currentCompany = ref<any>(null);
 
 // 当前日期标签文本
 const currentDayLabel = computed(() => {
@@ -654,27 +707,159 @@ const handleDayChange = (dayKey: number) => {
   refreshAllData();
 };
 
+// 监听机组变化，重新获取中标数据
+watch(selectedUnitId, () => {
+  if (settlementTab.value === 'analysis') {
+    fetchUnitBidResults();
+  }
+});
+
+// 数字格式化方法
+const formatNumber = (val: any): string => {
+  if (val === null || val === undefined || val === '') {
+    return '0';
+  }
+  const num = parseFloat(val);
+  if (isNaN(num)) {
+    return '0';
+  }
+  // 保留两位小数，末尾0舍去
+  let str = num.toFixed(2);
+  if (str.includes('.')) {
+    str = str.replace(/\.?0+$/, '');
+  }
+  return str;
+};
+
 // 数据刷新统一入口
-const refreshAllData = () => {
+const refreshAllData = async () => {
   console.log(`刷新数据：${currentDayLabel.value} - ${settlementTab.value === 'overview' ? '市场总览' : '详情分析'}`);
+  await fetchCurrentCompany();
   fetchSettlementData();
   fetchHistoryDetail();
   fetchBalanceChart();
   fetchEnergyPriceChart();
+  // 如果在详情分析页面，获取机组中标数据
+  if (settlementTab.value === 'analysis') {
+    fetchUnitBidResults();
+  }
 };
+
+// 获取当前用户信息
+async function fetchCurrentUser() {
+  try {
+    const user = await getCurrentAdmin();
+    currentUser.value = user;
+    console.log("当前用户:", user);
+    return user;
+  } catch (e: any) {
+    console.error("获取用户信息失败", e);
+    return null;
+  }
+}
+
+// 获取当前用户的企业信息
+async function fetchCurrentCompany() {
+  try {
+    const user = await fetchCurrentUser();
+    if (!user) {
+      return null;
+    }
+    
+    const { data } = await marketApi.getCompanies();
+    const companies = data.items || [];
+    const companyCode = user.username;
+    currentCompany.value = companies.find((c: any) => c.name === companyCode) || null;
+    console.log("当前企业:", currentCompany.value);
+    // 设置默认选中的机组
+    if (currentCompany.value && currentCompany.value.units && currentCompany.value.units.length > 0) {
+      selectedUnitId.value = currentCompany.value.units[0].id;
+    }
+    return currentCompany.value;
+  } catch (e: any) {
+    console.error("获取企业信息失败", e);
+    return null;
+  }
+}
 
 // 获取结算数据
 async function fetchSettlementData() {
   try {
-    const [ov, dt] = await Promise.all([
-      marketApi.getSettlementOverview(),
-      marketApi.getSettlementDetail(),
-    ]);
+    console.log("=== [调试] 开始获取结算数据 ===");
+    console.log(`[调试] 当前选择的日期：第 ${currentDay.value} 天`);
+    
+    const user = await fetchCurrentUser();
+    console.log("[调试] 当前用户:", user);
+    console.log("[调试] 用户名:", user?.username);
+    
+    console.log("[调试] 调用 settlement-overview API...");
+    // 传递当前选择的日期索引和 useDefaultCase=true 以确保使用 Output0 数据
+    const ov = await marketApi.getSettlementOverview(currentDay.value, true);
+    console.log("[调试] API 返回状态码:", ov.status);
+    console.log("[调试] API 返回 headers:", JSON.stringify(ov.headers));
+    console.log("[调试] API 返回完整响应对象:", ov);
+    console.log("[调试] API 返回 data 属性:", ov.data);
+    console.log("[调试] API 返回完整数据 JSON:", JSON.stringify(ov.data, null, 2));
+    
+    // 检查响应数据结构
+    if (!ov.data) {
+      console.error("[调试] ❌ 错误：API 返回的 data 为 null!");
+      overviewData.value = { energy_market: {} };
+      return;
+    }
+    
+    // 检查 data 是否有 energy_market 字段
+    console.log("[调试] ov.data 的键名列表:", Object.keys(ov.data));
+    console.log("[调试] ov.data.energy_market 类型:", typeof ov.data.energy_market);
+    console.log("[调试] ov.data.energy_market 是否为对象:", ov.data.energy_market instanceof Object);
+    
+    if (ov.data.energy_market) {
+      console.log("[调试] energy_market 数据:", ov.data.energy_market);
+      console.log("[调试] avg_price:", ov.data.energy_market.avg_price);
+      console.log("[调试] total_generation:", ov.data.energy_market.total_generation);
+      console.log("[调试] energy_market 字段数量:", Object.keys(ov.data.energy_market).length);
+      
+      // 逐个字段检查
+      console.log("[调试] 检查 avg_price 字段值:", ov.data.energy_market.avg_price);
+      console.log("[调试] avg_price 是否为 undefined:", ov.data.energy_market.avg_price === undefined);
+      console.log("[调试] avg_price 是否为 null:", ov.data.energy_market.avg_price === null);
+    } else {
+      console.warn("[调试] ⚠️ 警告：energy_market 为空或不存在!");
+      console.log("[调试] ov.data 的所有键名:", Object.keys(ov.data));
+    }
+    
     overviewData.value = ov.data;
+    console.log("[调试] overviewData 已赋值:", overviewData.value);
+    console.log("[调试] overviewData.energy_market:", overviewData.value?.energy_market);
+    console.log("[调试] overviewData.energy_market.avg_price:", overviewData.value?.energy_market?.avg_price);
+    
+    // 使用 nextTick 确保响应式更新完成
+    await nextTick();
+    console.log("[调试] [nextTick 后] overviewData:", overviewData.value);
+    console.log("[调试] [nextTick 后] energy_market.avg_price:", overviewData.value?.energy_market?.avg_price);
+    
+    console.log("\n[调试] 调用 settlement-detail API...");
+    // 传递当前选择的日期索引和 useDefaultCase=true 以确保使用 Output0 数据
+    const dt = await marketApi.getSettlementDetail(currentDay.value, true);
+    console.log("[调试] settlement-detail 返回数据:", dt.data);
+    
     settlementRows.value = dt.data.energy_rows || [];
-    g13SettlementData.value = settlementRows.value.find((row: any) => row.name === "G13") || null;
-  } catch (e) { 
-    console.error("获取结算数据失败", e); 
+    console.log("[调试] settlementRows 长度:", settlementRows.value.length);
+    console.log("[调试] settlementRows 数据:", settlementRows.value);
+    
+    // 根据用户的用户名查找对应的企业结算数据
+    const companyCode = user?.username || "G13";
+    g13SettlementData.value = settlementRows.value.find((row: any) => row.name === companyCode) || null;
+    console.log("[调试] 企业结算数据 (companyCode=" + companyCode + "):", g13SettlementData.value);
+    
+    console.log("\n=== [调试] 结算数据获取完成 ===");
+  } catch (e: any) { 
+    console.error("❌ 获取结算数据失败", e);
+    console.error("错误堆栈:", e.stack);
+    // 只在 overviewData 为空时才设置默认值，避免覆盖已有数据
+    if (!overviewData.value || !overviewData.value.energy_market) {
+      overviewData.value = { energy_market: {} };
+    }
   }
 }
 
@@ -694,7 +879,7 @@ async function fetchHistoryDetail() {
         values: Array.from({ length: 96 }, () => Math.floor(Math.random() * 200) + 50)
       }));
     }
-  } catch (e) { 
+  } catch (e: any) { 
     console.error("获取历史详情失败", e);
     // 报错时生成测试数据
     historyEnergyDetail.value = Array.from({ length: 8 }, (_, idx) => ({
@@ -707,33 +892,107 @@ async function fetchHistoryDetail() {
 // 获取平衡图表数据
 async function fetchBalanceChart() {
   try {
-    const { data } = await marketApi.getBalanceChart();
+    // 调用 energy-balance API，传递当前选择的日期索引
+    // useDefaultCase=true 表示使用 Output0（理性申报）
+    const { data } = await marketApi.getEnergyBalance(currentDay.value, true);
     balanceChart.value = data;
-  } catch (e) { 
-    console.error("获取平衡图表失败", e); 
+    console.log(`[电力电量平衡] 第${currentDay.value}天数据:`, data);
+  } catch (e: any) { 
+    console.error("获取电力电量平衡数据失败", e); 
+    // 报错时使用空数据
+    balanceChart.value = { thermal: [], wind: [], solar: [], hydro: [], load: [], periods: 96 };
   }
 }
 
 // 获取出清电价数据
 async function fetchEnergyPriceChart() {
   try {
-    const { data } = await marketApi.getOutResults({ sheet: "energy_price", row_index: 0 });
+    // 使用新的出清价格 API，根据当前选择的机组和日期获取数据
+    // useDefaultCase=true 表示使用 Output0（理性申报）
+    const unitId = selectedUnitId.value || "Thermal_1";
+    const { data } = await marketApi.getClearingPrice(unitId, currentDay.value, true);
     const items = data.items || [];
     energyPriceData.value = items.length > 0 ? items[0].values : [];
-  } catch (e) { 
-    console.error("获取出清电价失败", e); 
+    console.log(`[出清电价] 第${currentDay.value}天，机组${unitId} (Output0):`, energyPriceData.value);
+  } catch (e: any) { 
+    console.error("获取出清电价失败", e);
+    energyPriceData.value = [];
   }
 }
 
+// 获取机组中标数据（出力与均价）- 使用 Output0
+async function fetchUnitBidResults() {
+  if (!selectedUnitId.value) {
+    console.warn("[中标数据] 未选择机组");
+    return;
+  }
+  
+  unitBidLoading.value = true;
+  
+  try {
+    console.log(`[中标数据] 开始获取 - 机组:${selectedUnitId.value}, 日期：第${currentDay.value}天 (Output0)`);
+    
+    // useDefaultCase=true 表示使用 Output0（理性申报）
+    const data = await marketApi.getUnitBidResults(
+      selectedUnitId.value,
+      currentDay.value,
+      true  // 理性申报使用固定 Output0
+    );
+    
+    console.log("[中标数据] API 返回:", data);
 
+    // 赋值给响应式变量
+    unitBidOutputValues.value = data.output_values || [];
+    unitBidPriceValues.value = data.price_values || [];
+    unitBidRevenueValues.value = data.revenue_values || [];
+    
+    console.log(`[中标数据] 成功获取 - 出力:${unitBidOutputValues.value.length}点，均价:${unitBidPriceValues.value.length}点，收益:${unitBidRevenueValues.value.length}点`);
+    
+    // 显示前 3 个时段的详细数据用于调试
+    if (unitBidOutputValues.value.length > 0 && unitBidPriceValues.value.length > 0) {
+      console.log('[中标数据] 前 3 个时段详情:');
+      for (let i = 0; i < Math.min(3, unitBidOutputValues.value.length); i++) {
+        console.log(`  时段${i + 1}: 出力=${unitBidOutputValues.value[i]} MW, 均价=${unitBidPriceValues.value[i]} 元/MWh, 收益=${unitBidRevenueValues.value[i]} 元`);
+      }
+      // 检查均价数据是否全部相同
+      const firstPrice = Number(unitBidPriceValues.value[0]);
+      const allSame = unitBidPriceValues.value.every(v => Number(v) === firstPrice);
+      if (allSame) {
+        console.error('[中标数据] ⚠️ 警告：所有时段的中标均价都相同！这可能是直线的原因:', firstPrice);
+      } else {
+        console.log('[中标数据] ✅ 均价数据有变化，不是直线');
+        const prices = unitBidPriceValues.value.map(v => Number(v));
+        console.log('[中标数据] 均价范围：min=', Math.min(...prices), 'max=', Math.max(...prices));
+      }
+    }
+
+  } catch (error: any) {
+    console.error("[中标数据] 获取失败", error);
+    unitBidOutputValues.value = [];
+    unitBidPriceValues.value = [];
+    unitBidRevenueValues.value = [];
+  } finally {
+    unitBidLoading.value = false;
+  }
+}
 
 // 初始化数据
-onMounted(() => {
+onMounted(async () => {
+  await fetchCurrentCompany();
+  // 设置默认选中的机组
+  if (currentCompany.value && currentCompany.value.units && currentCompany.value.units.length > 0) {
+    selectedUnitId.value = currentCompany.value.units[0].id;
+  }
   fetchSettlementData();
   fetchHistoryDetail();
   fetchBalanceChart();
   fetchEnergyPriceChart();
+  // 获取机组中标数据（如果在详情分析页面）
+  if (settlementTab.value === 'analysis') {
+    fetchUnitBidResults();
+  }
 });
+
 </script>
 
 <style scoped>

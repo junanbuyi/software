@@ -26,75 +26,74 @@
         <div class="card-header-row">
           <!-- 标题随日期变化 -->
           <h3 class="card-title">{{ currentDayLabel }} 电能量市场结果</h3>
-          <span class="score-badge">评分：80</span>
         </div>
         <div class="market-results">
           <!-- 第一行：电价相关 -->
           <div class="result-row row-1">
             <div class="result-item">
-              <div class="result-value">{{ overviewData.energy_market.avg_price || 0 }}</div>
+              <div class="result-value">{{ formatDiffValue(overviewData.energy_market.avg_price, rationalOverviewData.energy_market.avg_price) }}</div>
               <div class="result-label">成交均价(元/MWh)</div>
             </div>
             <div class="result-item">
-              <div class="result-value">{{ overviewData.energy_market.max_node_price || 0 }}</div>
+              <div class="result-value">{{ formatDiffValue(overviewData.energy_market.max_node_price, rationalOverviewData.energy_market.max_node_price) }}</div>
               <div class="result-label">最高节点电价(元/MWh)</div>
             </div>
             <div class="result-item">
-              <div class="result-value">{{ overviewData.energy_market.min_node_price || 0 }}</div>
+              <div class="result-value">{{ formatDiffValue(overviewData.energy_market.min_node_price, rationalOverviewData.energy_market.min_node_price) }}</div>
               <div class="result-label">最低节点电价(元/MWh)</div>
             </div>
             <div class="result-item">
-              <div class="result-value">{{ overviewData.energy_market.avg_quote_price || 0 }}</div>
+              <div class="result-value">{{ formatDiffValue(overviewData.energy_market.avg_quote_price, rationalOverviewData.energy_market.avg_quote_price) }}</div>
               <div class="result-label">申报均价(元/MWh)</div>
             </div>
             <div class="result-item">
-              <div class="result-value">{{ overviewData.energy_market.supply_demand_ratio || 0 }}</div>
+              <div class="result-value">{{ formatDiffValue(overviewData.energy_market.supply_demand_ratio, rationalOverviewData.energy_market.supply_demand_ratio) }}</div>
               <div class="result-label">供需比</div>
             </div>
           </div>
           <!-- 第二行：电量相关 -->
           <div class="result-row row-2">
             <div class="result-item">
-              <div class="result-value">{{ overviewData.energy_market.total_generation || 0 }}</div>
+              <div class="result-value">{{ formatDiffValue(overviewData.energy_market.total_generation, rationalOverviewData.energy_market.total_generation) }}</div>
               <div class="result-label">总发电量(MWh)</div>
             </div>
             <div class="result-item">
-              <div class="result-value">{{ overviewData.energy_market.total_consumption || 0 }}</div>
+              <div class="result-value">{{ formatDiffValue(overviewData.energy_market.total_consumption, rationalOverviewData.energy_market.total_consumption) }}</div>
               <div class="result-label">总用电量(MWh)</div>
             </div>
             <div class="result-item">
-              <div class="result-value">{{ overviewData.energy_market.re_curtailment || 0 }}</div>
+              <div class="result-value">{{ formatDiffValue(overviewData.energy_market.re_curtailment, rationalOverviewData.energy_market.re_curtailment) }}</div>
               <div class="result-label">新能源总弃电量(MWh)</div>
             </div>
             <div class="result-item">
-              <div class="result-value">{{ overviewData.energy_market.quote_quantity || 0 }}</div>
+              <div class="result-value">{{ formatDiffValue(overviewData.energy_market.quote_quantity, rationalOverviewData.energy_market.quote_quantity) }}</div>
               <div class="result-label">申报出力(MW)</div>
             </div>
             <div class="result-item">
-              <div class="result-value">{{ overviewData.energy_market.total_output || 0 }}</div>
+              <div class="result-value">{{ formatDiffValue(overviewData.energy_market.total_output, rationalOverviewData.energy_market.total_output) }}</div>
               <div class="result-label">成交总出力(100MW)</div>
             </div>
           </div>
           <!-- 第三行：其他指标 -->
           <div class="result-row row-3">
             <div class="result-item">
-              <div class="result-value">{{ overviewData.energy_market.total_capacity || 0 }}</div>
+              <div class="result-value">{{ formatDiffValue(overviewData.energy_market.total_capacity, rationalOverviewData.energy_market.total_capacity) }}</div>
               <div class="result-label">总装机容量(100MW)</div>
             </div>
             <div class="result-item">
-              <div class="result-value">{{ overviewData.energy_market.plant_count || 0 }}</div>
+              <div class="result-value">{{ formatDiffValue(overviewData.energy_market.plant_count, rationalOverviewData.energy_market.plant_count) }}</div>
               <div class="result-label">发电企业数目</div>
             </div>
             <div class="result-item">
-              <div class="result-value">{{ overviewData.energy_market.quote_unit_count || 0 }}</div>
+              <div class="result-value">{{ formatDiffValue(overviewData.energy_market.quote_unit_count, rationalOverviewData.energy_market.quote_unit_count) }}</div>
               <div class="result-label">申报机组数目</div>
             </div>
             <div class="result-item">
-              <div class="result-value">{{ overviewData.energy_market.bid_units || 0 }}</div>
+              <div class="result-value">{{ formatDiffValue(overviewData.energy_market.bid_units, rationalOverviewData.energy_market.bid_units) }}</div>
               <div class="result-label">中标机组数目</div>
             </div>
             <div class="result-item">
-              <div class="result-value">{{ overviewData.energy_market.total_revenue || 0 }}</div>
+              <div class="result-value">{{ formatDiffValue(overviewData.energy_market.total_revenue, rationalOverviewData.energy_market.total_revenue) }}</div>
               <div class="result-label">总交易额(万元)</div>
             </div>
           </div>
@@ -141,8 +140,19 @@
             <line x1="50" y1="10" x2="50" y2="200" stroke="#e0e0e0" stroke-width="1"/>
             <line x1="50" y1="200" x2="690" y2="200" stroke="#e0e0e0" stroke-width="1"/>
             <text x="50" y="10" font-size="10" fill="#666" text-anchor="middle">电价(元/MWh)</text>
-            <text v-for="(v, i) in [0, 100, 200, 300]" :key="i" :x="45" :y="200 - i * 60 + 4" text-anchor="end" font-size="11" fill="#999">{{ v }}</text>
+            <text v-for="(v, i) in clearingPriceYLabels" :key="i" :x="45" :y="200 - i * 36 + 4" text-anchor="end" font-size="11" fill="#999">{{ v }}</text>
+            <!-- 出清电价折线 - 自主报价 -->
             <polyline :points="clearingChartPoints" fill="none" stroke="#1890ff" stroke-width="2"/>
+            <!-- 出清电价折线 - 理性报价 -->
+            <polyline :points="rationalClearingChartPoints" fill="none" stroke="#1890ff" stroke-width="1" stroke-dasharray="5,5"/>
+            
+            <!-- 图例 -->
+            <g transform="translate(300, 10)">
+              <line x1="0" y1="4" x2="20" y2="4" stroke="#1890ff" stroke-width="2"/>
+              <text x="25" y="8" font-size="10" fill="#666">出清电价(自主)</text>
+              <line x1="100" y1="4" x2="120" y2="4" stroke="#1890ff" stroke-width="1" stroke-dasharray="5,5"/>
+              <text x="125" y="8" font-size="10" fill="#666">出清电价(理性)</text>
+            </g>
             
             <!-- X轴刻度和标签（适配96时段） -->
             <template v-for="i in maxPeriods" :key="'x-clearing-'+i">
@@ -161,47 +171,47 @@
       <div class="card">
         <!-- 标题随日期变化 -->
         <h3 class="card-title">{{ currentDayLabel }} 公司中标结果</h3>
-        <!-- G13企业中标结果 -->
-        <div v-if="g13SettlementData" class="g13-settlement-results">
+        <!-- 公司中标结果 -->
+        <div v-if="g13SettlementData && rationalG13SettlementData" class="g13-settlement-results">
           <div class="result-row row-4">
             <div class="result-item">
               <div class="result-label">火电厂名称</div>
-              <div class="result-value">{{ g13SettlementData.name || 'G13' }}</div>
+              <div class="result-value">{{ currentCompanyName }}</div>
             </div>
             <div class="result-item">
               <div class="result-label">运行成本(万元)</div>
-              <div class="result-value">{{ g13SettlementData.opCost || 0 }}</div>
+              <div class="result-value">{{ formatDiffValue(g13SettlementData.opCost, rationalG13SettlementData.opCost) }}</div>
             </div>
             <div class="result-item">
               <div class="result-label">开机成本(万元)</div>
-              <div class="result-value">{{ g13SettlementData.startCost || 0 }}</div>
+              <div class="result-value">{{ formatDiffValue(g13SettlementData.startCost, rationalG13SettlementData.startCost) }}</div>
             </div>
             <div class="result-item">
               <div class="result-label">关机成本(万元)</div>
-              <div class="result-value">{{ g13SettlementData.stopCost || 0 }}</div>
+              <div class="result-value">{{ formatDiffValue(g13SettlementData.stopCost, rationalG13SettlementData.stopCost) }}</div>
             </div>
           </div>
           <div class="result-row row-4">
             <div class="result-item">
               <div class="result-label">总中标出力(MW)</div>
-              <div class="result-value">{{ g13SettlementData.output || 0 }}</div>
+              <div class="result-value">{{ formatDiffValue(g13SettlementData.output, rationalG13SettlementData.output) }}</div>
             </div>
             <div class="result-item">
               <div class="result-label">中标电量均价(元/MWh)</div>
-              <div class="result-value">{{ g13SettlementData.avgPrice || 0 }}</div>
+              <div class="result-value">{{ formatDiffValue(g13SettlementData.avgPrice, rationalG13SettlementData.avgPrice) }}</div>
             </div>
             <div class="result-item">
               <div class="result-label">总中标收益(万元)</div>
-              <div class="result-value">{{ g13SettlementData.revenue || 0 }}</div>
+              <div class="result-value">{{ formatDiffValue(g13SettlementData.revenue, rationalG13SettlementData.revenue) }}</div>
             </div>
             <div class="result-item">
               <div class="result-label">净收益(万元)</div>
-              <div class="result-value">{{ g13SettlementData.netIncome || 0 }}</div>
+              <div class="result-value">{{ formatDiffValue(g13SettlementData.netIncome, rationalG13SettlementData.netIncome) }}</div>
             </div>
           </div>
         </div>
         <div v-else class="no-data">
-          <p>暂无G13企业的中标结果数据</p>
+          <p>暂无{{ currentCompanyName }}企业的中标结果数据</p>
         </div>
       </div>
 
@@ -216,16 +226,16 @@
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
               <h3 class="card-title" style="margin: 0;">中标出力与均价</h3>
               <select 
-                v-model="selectedUnitIndex" 
+                v-model="selectedUnitId" 
                 style="padding: 4px 8px; border: 1px solid #d9d9d9; border-radius: 4px; font-size: 12px; color: #333;"
-                :disabled="!historyEnergyDetail.length"
+                :disabled="!currentCompany || !currentCompany.units || currentCompany.units.length === 0"
               >
                 <option 
-                  v-for="(row, idx) in historyEnergyDetail.slice(0, 8)" 
-                  :key="`unit-option-${idx}`"
-                  :value="idx"
+                  v-for="unit in availableUnits" 
+                  :key="unit.id"
+                  :value="unit.id"
                 >
-                  Thermal_{{ Number(row.row_index) + 1 }}
+                  机组{{ unit.id.replace('Thermal_', '') }}
                 </option>
               </select>
             </div>
@@ -239,20 +249,28 @@
                 <line x1="50" y1="200" x2="690" y2="200" stroke="#e0e0e0" stroke-width="1"/>
                 <!-- 左侧Y轴标签（出力） -->
                 <text x="50" y="10" font-size="10" fill="#1890ff" text-anchor="middle">出力(MW)</text>
-                <text v-for="(v, i) in barYLabels.slice(0, 4)" :key="'left-'+i" :x="45" :y="200 - i * 60 + 4" text-anchor="end" font-size="11" fill="#1890ff">{{ v }}</text>
+                <text v-for="(v, i) in barYLabels" :key="'left-'+i" :x="45" :y="200 - i * 36 + 4" text-anchor="end" font-size="11" fill="#1890ff">{{ v }}</text>
                 <!-- 右侧Y轴标签（均价） -->
                 <text x="690" y="10" font-size="10" fill="#faad14" text-anchor="middle">均价(元/MWh)</text>
-                <text v-for="(v, i) in priceYLabels.slice(0, 4)" :key="'right-'+i" :x="695" :y="200 - i * 60 + 4" text-anchor="start" font-size="11" fill="#faad14">{{ v }}</text>
-                <!-- 中标出力折线 -->
+                <text v-for="(v, i) in priceYLabels" :key="'right-'+i" :x="695" :y="200 - i * 36 + 4" text-anchor="start" font-size="11" fill="#faad14">{{ v }}</text>
+                <!-- 中标出力折线 - 自主报价 -->
                 <polyline v-if="outputLinePath" :points="outputLinePath" fill="none" stroke="#1890ff" stroke-width="2"/>
-                <!-- 中标均价折线（副坐标轴） -->
+                <!-- 中标出力折线 - 理性报价 -->
+                <polyline v-if="rationalOutputLinePath" :points="rationalOutputLinePath" fill="none" stroke="#1890ff" stroke-width="1" stroke-dasharray="5,5"/>
+                <!-- 中标均价折线（副坐标轴）- 自主报价 -->
                 <polyline v-if="priceLinePathDual" :points="priceLinePathDual" fill="none" stroke="#faad14" stroke-width="2"/>
-                <!-- 图例 -->
-                <g transform="translate(300, 10)">
+                <!-- 中标均价折线（副坐标轴）- 理性报价 -->
+                <polyline v-if="rationalPriceLinePathDual" :points="rationalPriceLinePathDual" fill="none" stroke="#faad14" stroke-width="1" stroke-dasharray="5,5"/>
+                <!-- 图例 - 一行展示 -->
+                <g transform="translate(180, 10)">
                   <line x1="0" y1="4" x2="20" y2="4" stroke="#1890ff" stroke-width="2"/>
-                  <text x="25" y="8" font-size="10" fill="#666">中标出力</text>
-                  <line x1="80" y1="4" x2="100" y2="4" stroke="#faad14" stroke-width="2"/>
-                  <text x="105" y="8" font-size="10" fill="#666">中标均价</text>
+                  <text x="25" y="8" font-size="10" fill="#666">中标出力(自主)</text>
+                  <line x1="100" y1="4" x2="120" y2="4" stroke="#1890ff" stroke-width="1" stroke-dasharray="5,5"/>
+                  <text x="125" y="8" font-size="10" fill="#666">中标出力(理性)</text>
+                  <line x1="230" y1="4" x2="250" y2="4" stroke="#faad14" stroke-width="2"/>
+                  <text x="255" y="8" font-size="10" fill="#666">中标均价(自主)</text>
+                  <line x1="330" y1="4" x2="350" y2="4" stroke="#faad14" stroke-width="1" stroke-dasharray="5,5"/>
+                  <text x="355" y="8" font-size="10" fill="#666">中标均价(理性)</text>
                 </g>
                 
                 <template v-for="i in maxPeriods" :key="'x-output-'+i">
@@ -271,8 +289,19 @@
                 <line x1="50" y1="10" x2="50" y2="200" stroke="#e0e0e0" stroke-width="1"/>
                 <line x1="50" y1="200" x2="690" y2="200" stroke="#e0e0e0" stroke-width="1"/>
                 <text x="50" y="10" font-size="10" fill="#666" text-anchor="middle">收益(元)</text>
-                <text v-for="(v, i) in revenueYLabels.slice(0, 4)" :key="i" :x="45" :y="200 - i * 60 + 4" text-anchor="end" font-size="11" fill="#999">{{ v }}</text>
+                <text v-for="(v, i) in revenueYLabels" :key="i" :x="45" :y="200 - i * 36 + 4" text-anchor="end" font-size="11" fill="#999">{{ v }}</text>
+                <!-- 中标收益折线 - 自主报价 -->
                 <polyline v-if="revenueLinePath" :points="revenueLinePath" fill="none" stroke="#52c41a" stroke-width="2"/>
+                <!-- 中标收益折线 - 理性报价 -->
+                <polyline v-if="rationalRevenueLinePath" :points="rationalRevenueLinePath" fill="none" stroke="#52c41a" stroke-width="1" stroke-dasharray="5,5"/>
+                
+                <!-- 图例 -->
+                <g transform="translate(300, 10)">
+                  <line x1="0" y1="4" x2="20" y2="4" stroke="#52c41a" stroke-width="2"/>
+                  <text x="25" y="8" font-size="10" fill="#666">中标收益(自主)</text>
+                  <line x1="100" y1="4" x2="120" y2="4" stroke="#52c41a" stroke-width="1" stroke-dasharray="5,5"/>
+                  <text x="125" y="8" font-size="10" fill="#666">中标收益(理性)</text>
+                </g>
                 
                 <template v-for="i in maxPeriods" :key="'x-revenue-'+i">
                   <text v-if="i % 8 === 0" :x="50 + (i - 0.5) * 6.67" y="218" text-anchor="middle" font-size="9" fill="#666">{{ i }}</text>
@@ -288,8 +317,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from "vue";
+import { ref, computed, onMounted, watch } from "vue";
 import { marketApi } from "../api/market";
+import { getCurrentAdmin } from "../api/admin";
 
 // 定义类型接口 - 解决any类型问题
 interface HistoryEnergyItem {
@@ -313,26 +343,88 @@ const barColors = [
 // 选中机组索引（响应式）
 const selectedUnitIndex = ref<number>(0);
 
-// 最大时段数（基于选中机组）
+// 最大时段数（基于中标出力数据）
 const maxPeriods = computed<number>(() => {
-  return selectedUnitData.value?.values?.length || 96;
+  const selfLen = unitBidOutputValues.value.length;
+  const rationalLen = rationalUnitBidOutputValues.value.length;
+  return Math.max(selfLen, rationalLen) || 96;
 });
 
-// 最大出力值（基于选中机组）
+// 最大出力值（基于中标出力数据）
 const maxOutput = computed<number>(() => {
-  if (!selectedUnitData.value) return 1;
+  const selfData = unitBidOutputValues.value;
+  const rationalData = rationalUnitBidOutputValues.value;
+  if (!selfData.length && !rationalData.length) return 1;
   let max = 1;
-  selectedUnitData.value.values.forEach((v: any) => {
+  selfData.forEach((v: any) => {
     const numVal = Number(v);
     if (!isNaN(numVal) && numVal > max) max = numVal;
   });
-  return max;
+  rationalData.forEach((v: any) => {
+    const numVal = Number(v);
+    if (!isNaN(numVal) && numVal > max) max = numVal;
+  });
+  return Math.ceil(max / 100) * 100;
 });
 
-// Y轴刻度标签
+// Y轴刻度标签（出力）- 6等分
 const barYLabels = computed<number[]>(() => {
   const max = maxOutput.value;
-  return [0, Math.round(max / 4), Math.round(max / 2), Math.round(max * 3 / 4), Math.round(max)];
+  const step = max / 5;
+  return [
+    0,
+    Math.round(step),
+    Math.round(step * 2),
+    Math.round(step * 3),
+    Math.round(step * 4),
+    max
+  ];
+});
+
+// 企业选择相关
+const currentCompany = ref<any>(null);
+
+const currentCompanyName = computed(() => {
+  return currentCompany.value?.name || "G13";
+});
+
+// 机组选择相关
+const selectedUnitId = ref<string>(""); // 默认选中第一个机组
+
+const availableUnits = computed(() => {
+  if (!currentCompany.value || !currentCompany.value.units || currentCompany.value.units.length === 0) {
+    return [];
+  }
+  return currentCompany.value.units;
+});
+
+// 获取当前用户的企业信息
+async function fetchCompanies() {
+  try {
+    const user = await getCurrentAdmin();
+    if (!user) {
+      console.error("未获取到当前用户信息");
+      return;
+    }
+    
+    const companyCode = user.username;
+    const res = await marketApi.getCompanies();
+    const companies = res.data.items || [];
+    currentCompany.value = companies.find((c: any) => c.name === companyCode) || null;
+    
+    if (currentCompany.value && currentCompany.value.units && currentCompany.value.units.length > 0) {
+      selectedUnitId.value = currentCompany.value.units[0].id;
+    }
+  } catch (e) {
+    console.error("获取企业列表失败", e);
+  }
+}
+
+// 当机组选择变化时，重新获取中标数据
+watch(selectedUnitId, () => {
+  if (selectedUnitId.value) {
+    fetchUnitBidResults();
+  }
 });
 
 // 获取选中机组数据
@@ -341,28 +433,43 @@ const selectedUnitData = computed((): HistoryEnergyItem | null => {
   return historyEnergyDetail.value.slice(0, 8)[selectedUnitIndex.value] || null;
 });
 
-// 中标均价（电能量市场出清电价）相关计算
+// 中标均价相关计算
 const maxPrice = computed<number>(() => {
-  if (!energyPriceData.value.length) return 1000;
-  let max = 1000;
-  energyPriceData.value.forEach((v: any) => {
+  const selfData = unitBidPriceValues.value;
+  const rationalData = rationalUnitBidPriceValues.value;
+  if (!selfData.length && !rationalData.length) return 500;
+  let max = 1;
+  selfData.forEach((v: any) => {
     const numVal = Number(v);
     if (!isNaN(numVal) && numVal > max) max = numVal;
   });
-  return Math.ceil(max / 100) * 100;
+  rationalData.forEach((v: any) => {
+    const numVal = Number(v);
+    if (!isNaN(numVal) && numVal > max) max = numVal;
+  });
+  if (max === 0) return 500;
+  return Math.ceil(max / 10) * 10;
 });
 
-// 中标均价Y轴刻度标签
+// 中标均价Y轴刻度标签 - 6等分
 const priceYLabels = computed<number[]>(() => {
   const max = maxPrice.value;
-  return [0, Math.round(max / 4), Math.round(max / 2), Math.round(max * 3 / 4), max];
+  const step = max / 5;
+  return [
+    0,
+    Math.round(step),
+    Math.round(step * 2),
+    Math.round(step * 3),
+    Math.round(step * 4),
+    max
+  ];
 });
 
-// 中标均价副坐标轴路径（与出力共用X轴，但使用右侧Y轴比例）
+// 中标均价副坐标轴路径（与出力共用X轴，但使用右侧Y轴比例）- 自主报价
 const priceLinePathDual = computed<string>(() => {
-  if (!energyPriceData.value.length) return "";
+  if (!unitBidPriceValues.value.length) return "";
   const maxVal = maxPrice.value || 1;
-  const points = energyPriceData.value.map((value, idx) => {
+  const points = unitBidPriceValues.value.map((value, idx) => {
     const x = 50 + idx * 6.67;
     const y = 200 - (Number(value) / maxVal) * 180;
     return `${x.toFixed(1)},${y.toFixed(1)}`;
@@ -370,11 +477,23 @@ const priceLinePathDual = computed<string>(() => {
   return points.join(" ");
 });
 
-// 中标出力折线路径
+// 中标均价副坐标轴路径（与出力共用X轴，但使用右侧Y轴比例）- 理性报价
+const rationalPriceLinePathDual = computed<string>(() => {
+  if (!rationalUnitBidPriceValues.value.length) return "";
+  const maxVal = maxPrice.value || 1;
+  const points = rationalUnitBidPriceValues.value.map((value, idx) => {
+    const x = 50 + idx * 6.67;
+    const y = 200 - (Number(value) / maxVal) * 180;
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  });
+  return points.join(" ");
+});
+
+// 中标出力折线路径 - 自主报价
 const outputLinePath = computed<string>(() => {
-  if (!selectedUnitData.value || !selectedUnitData.value.values.length) return "";
+  if (!unitBidOutputValues.value.length) return "";
   const maxVal = maxOutput.value || 1;
-  const points = selectedUnitData.value.values.map((value: any, idx: number) => {
+  const points = unitBidOutputValues.value.map((value: any, idx: number) => {
     const x = 50 + idx * 6.67;
     const y = 200 - (Number(value) / maxVal) * 180;
     return `${x.toFixed(1)},${y.toFixed(1)}`;
@@ -382,7 +501,29 @@ const outputLinePath = computed<string>(() => {
   return points.join(" ");
 });
 
-// 中标收益折线路径
+// 中标出力折线路径 - 理性报价
+const rationalOutputLinePath = computed<string>(() => {
+  if (!rationalUnitBidOutputValues.value.length) return "";
+  const maxVal = maxOutput.value || 1;
+  const points = rationalUnitBidOutputValues.value.map((value: any, idx: number) => {
+    const x = 50 + idx * 6.67;
+    const y = 200 - (Number(value) / maxVal) * 180;
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  });
+  return points.join(" ");
+});
+
+// 中标收益相关计算 - 自主报价（直接使用API返回的数据）
+const revenueData = computed<number[]>(() => {
+  return unitBidRevenueValues.value;
+});
+
+// 中标收益相关计算 - 理性报价（直接使用API返回的数据）
+const rationalRevenueData = computed<number[]>(() => {
+  return rationalUnitBidRevenueValues.value;
+});
+
+// 中标收益折线路径 - 自主报价
 const revenueLinePath = computed<string>(() => {
   if (!revenueData.value.length) return "";
   const maxVal = maxRevenue.value || 1;
@@ -394,32 +535,47 @@ const revenueLinePath = computed<string>(() => {
   return points.join(" ");
 });
 
-// 中标收益相关计算
-const revenueData = computed<number[]>(() => {
-  const output = selectedUnitData.value;
-  const prices = energyPriceData.value;
-  if (!output || !output.values || !prices.length) return [];
-  return output.values.map((v: any, i: number) => {
-    const outputVal = Number(v) || 0;
-    const priceVal = Number(prices[i]) || 0;
-    return outputVal * priceVal;
+// 中标收益折线路径 - 理性报价
+const rationalRevenueLinePath = computed<string>(() => {
+  if (!rationalRevenueData.value.length) return "";
+  const maxVal = maxRevenue.value || 1;
+  const points = rationalRevenueData.value.map((value, idx) => {
+    const x = 50 + idx * 6.67;
+    const y = 200 - (Number(value) / maxVal) * 180;
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
   });
+  return points.join(" ");
 });
 
 const maxRevenue = computed<number>(() => {
-  if (!revenueData.value.length) return 1000;
-  let max = 1000;
-  revenueData.value.forEach((v) => {
+  const selfData = revenueData.value;
+  const rationalData = rationalRevenueData.value;
+  if (!selfData.length && !rationalData.length) return 1000;
+  let max = 1;
+  selfData.forEach((v) => {
     const numVal = Number(v);
     if (!isNaN(numVal) && numVal > max) max = numVal;
   });
+  rationalData.forEach((v) => {
+    const numVal = Number(v);
+    if (!isNaN(numVal) && numVal > max) max = numVal;
+  });
+  if (max === 0) return 1000;
   return Math.ceil(max / 100) * 100;
 });
 
-// 中标收益Y轴刻度标签
+// 中标收益Y轴刻度标签 - 6等分
 const revenueYLabels = computed<number[]>(() => {
   const max = maxRevenue.value;
-  return [0, Math.round(max / 4), Math.round(max / 2), Math.round(max * 3 / 4), max];
+  const step = max / 5;
+  return [
+    0,
+    Math.round(step),
+    Math.round(step * 2),
+    Math.round(step * 3),
+    Math.round(step * 4),
+    max
+  ];
 });
 
 // 饼状图数据
@@ -491,11 +647,52 @@ const capacityArcs = computed(() => pieArcs(capacityPieData.value));
 
 
 
-// 出清电价图表坐标
+// 出清电价最大值
+const maxClearingPrice = computed<number>(() => {
+  const selfData = energyPriceData.value;
+  const rationalData = rationalEnergyPriceData.value;
+  if (!selfData.length && !rationalData.length) return 300;
+  let max = 1;
+  selfData.forEach((v: any) => {
+    const numVal = Number(v);
+    if (!isNaN(numVal) && numVal > max) max = numVal;
+  });
+  rationalData.forEach((v: any) => {
+    const numVal = Number(v);
+    if (!isNaN(numVal) && numVal > max) max = numVal;
+  });
+  if (max === 0) return 300;
+  return Math.ceil(max / 10) * 10;
+});
+
+// 出清电价Y轴刻度标签 - 6等分
+const clearingPriceYLabels = computed<number[]>(() => {
+  const max = maxClearingPrice.value;
+  const step = max / 5;
+  return [
+    0,
+    Math.round(step),
+    Math.round(step * 2),
+    Math.round(step * 3),
+    Math.round(step * 4),
+    max
+  ];
+});
+
+// 出清电价图表坐标 - 自主报价
 const clearingChartPoints = computed(() => {
   const vals = energyPriceData.value;
   if (!vals.length) return "";
-  const maxVal = Math.max(...vals, 1);
+  const maxVal = maxClearingPrice.value || 1;
+  const step = 640 / Math.max(vals.length - 1, 1);
+  return vals.map((v, i) => `${(50 + i * step).toFixed(1)},${(200 - (v / maxVal) * 180).toFixed(1)}`).join(" ");
+});
+
+// 出清电价图表坐标 - 理性报价
+const rationalClearingChartPoints = computed(() => {
+  const vals = rationalEnergyPriceData.value;
+  if (!vals.length) return "";
+  const maxVal = maxClearingPrice.value || 1;
   const step = 640 / Math.max(vals.length - 1, 1);
   return vals.map((v, i) => `${(50 + i * step).toFixed(1)},${(200 - (v / maxVal) * 180).toFixed(1)}`).join(" ");
 });
@@ -515,17 +712,71 @@ const dateTabs: DateTab[] = [
 const settlementTab = ref<string>("overview");
 const currentDay = ref<number>(1);
 const overviewData = ref<any>({ energy_market: {} });
+const rationalOverviewData = ref<any>({ energy_market: {} }); // 理性报价数据
 const settlementRows = ref<any[]>([]);
+const rationalSettlementRows = ref<any[]>([]); // 理性报价结算数据
 const g13SettlementData = ref<any>(null);
+const rationalG13SettlementData = ref<any>(null); // 理性报价G13数据
 const historyEnergyDetail = ref<HistoryEnergyItem[]>([]); // 修复：指定具体类型
 
-const energyPriceData = ref<number[]>([]);
+const energyPriceData = ref<number[]>([]); // 自主报价的出清电价数据
+const rationalEnergyPriceData = ref<number[]>([]); // 理性报价的出清电价数据
+
+// 用于中标出力与均价图表的数据
+const unitBidOutputValues = ref<number[]>([]); // 自主报价中标出力
+const unitBidPriceValues = ref<number[]>([]); // 自主报价中标均价
+const rationalUnitBidOutputValues = ref<number[]>([]); // 理性报价中标出力
+const rationalUnitBidPriceValues = ref<number[]>([]); // 理性报价中标均价
+
+// 用于中标收益图表的数据
+const unitBidRevenueValues = ref<number[]>([]); // 自主报价中标收益
+const rationalUnitBidRevenueValues = ref<number[]>([]); // 理性报价中标收益
 
 // 当前日期标签文本
 const currentDayLabel = computed(() => {
   const dayItem = dateTabs.find(item => item.key === currentDay.value);
   return dayItem?.label || "第一天";
 });
+
+// 格式化差值显示（自主报价 - 理性报价），并添加±符号
+const formatDiffValue = (selfValue: any, rationalValue: any): string => {
+  // 如果任一值不存在或为null/undefined，则返回0
+  if (selfValue == null || rationalValue == null) {
+    return "0";
+  }
+  
+  // 确保值是数字类型
+  const selfNum = Number(selfValue);
+  const rationalNum = Number(rationalValue);
+  
+  // 如果转换后不是有效数字，返回0
+  if (isNaN(selfNum) || isNaN(rationalNum)) {
+    return "0";
+  }
+  
+  // 计算差值（自主报价 - 理性报价）
+  const diff = selfNum - rationalNum;
+  
+  // 格式化显示，最多两位小数，末尾0舍去
+  const formatNumber = (num: number): string => {
+    // 先保留两位小数
+    let str = num.toFixed(2);
+    // 舍去末尾的0
+    if (str.includes('.')) {
+      str = str.replace(/\.?0+$/, '');
+    }
+    return str;
+  };
+  
+  // 格式化显示，如果是正数则添加+号，负数则保留-号
+  if (diff > 0) {
+    return "+" + formatNumber(diff);
+  } else if (diff < 0) {
+    return formatNumber(diff); // 负数本身带-号
+  } else {
+    return "0";
+  }
+};
 
 // Tab切换处理
 const handleTabChange = (tabKey: string) => {
@@ -545,18 +796,38 @@ const refreshAllData = () => {
   fetchSettlementData();
   fetchHistoryDetail();
   fetchEnergyPriceChart();
+  fetchUnitBidResults();
 };
 
 // 获取结算数据
 async function fetchSettlementData() {
   try {
-    const [ov, dt] = await Promise.all([
-      marketApi.getSettlementOverview(),
-      marketApi.getSettlementDetail(),
+    // 获取当前用户信息以确定公司代码
+    let companyCode = "G13"; // 默认值
+    try {
+      const user = await getCurrentAdmin();
+      if (user && user.username) {
+        companyCode = user.username;
+      }
+    } catch (e) {
+      console.warn("获取用户信息失败，使用默认公司代码");
+    }
+    
+    // 并行获取自主报价和理性报价数据
+    const [selfOv, selfDt, rationalOv, rationalDt] = await Promise.all([
+      marketApi.getSettlementOverview(currentDay.value, false), // 自主报价概览
+      marketApi.getSettlementDetail(currentDay.value, false),  // 自主报价详情
+      marketApi.getSettlementOverview(currentDay.value, true), // 理性报价概览
+      marketApi.getSettlementDetail(currentDay.value, true)    // 理性报价详情
     ]);
-    overviewData.value = ov.data;
-    settlementRows.value = dt.data.energy_rows || [];
-    g13SettlementData.value = settlementRows.value.find((row: any) => row.name === "G13") || null;
+    
+    overviewData.value = selfOv.data;
+    settlementRows.value = selfDt.data.energy_rows || [];
+    g13SettlementData.value = settlementRows.value.find((row: any) => row.name === companyCode) || null;
+    
+    rationalOverviewData.value = rationalOv.data;
+    rationalSettlementRows.value = rationalDt.data.energy_rows || [];
+    rationalG13SettlementData.value = rationalSettlementRows.value.find((row: any) => row.name === companyCode) || null;
   } catch (e) { 
     console.error("获取结算数据失败", e); 
   }
@@ -588,12 +859,67 @@ async function fetchHistoryDetail() {
   }
 }
 
+// 获取机组中标结果数据（中标出力、均价、收益）
+async function fetchUnitBidResults() {
+  if (!selectedUnitId.value) {
+    console.warn("[中标数据] 未选择机组");
+    return;
+  }
+  
+  try {
+    console.log(`[中标数据] 开始获取 - 机组:${selectedUnitId.value}, 日期：第${currentDay.value}天`);
+    
+    // 并行获取自主报价和理性报价的中标数据
+    const [selfData, rationalData] = await Promise.all([
+      marketApi.getUnitBidResults(selectedUnitId.value, currentDay.value, false), // 自主报价
+      marketApi.getUnitBidResults(selectedUnitId.value, currentDay.value, true)   // 理性报价
+    ]);
+    
+    console.log("[中标数据] 自主报价API 返回:", selfData);
+    console.log("[中标数据] 理性报价API 返回:", rationalData);
+
+    // 赋值给响应式变量
+    unitBidOutputValues.value = selfData.output_values || [];
+    unitBidPriceValues.value = selfData.price_values || [];
+    unitBidRevenueValues.value = selfData.revenue_values || [];
+    
+    rationalUnitBidOutputValues.value = rationalData.output_values || [];
+    rationalUnitBidPriceValues.value = rationalData.price_values || [];
+    rationalUnitBidRevenueValues.value = rationalData.revenue_values || [];
+    
+    console.log(`[中标数据] 成功获取 - 自主报价出力:${unitBidOutputValues.value.length}点，均价:${unitBidPriceValues.value.length}点，收益:${unitBidRevenueValues.value.length}点`);
+    console.log(`[中标数据] 成功获取 - 理性报价出力:${rationalUnitBidOutputValues.value.length}点，均价:${rationalUnitBidPriceValues.value.length}点，收益:${rationalUnitBidRevenueValues.value.length}点`);
+    
+  } catch (error: any) {
+    console.error("[中标数据] 获取失败", error);
+    unitBidOutputValues.value = [];
+    unitBidPriceValues.value = [];
+    unitBidRevenueValues.value = [];
+    rationalUnitBidOutputValues.value = [];
+    rationalUnitBidPriceValues.value = [];
+    rationalUnitBidRevenueValues.value = [];
+  }
+}
+
 // 获取出清电价数据
 async function fetchEnergyPriceChart() {
+  if (!selectedUnitId.value) {
+    console.warn("[出清电价] 未选择机组");
+    return;
+  }
+  
   try {
-    const { data } = await marketApi.getOutResults({ sheet: "energy_price", row_index: 0 });
-    const items = data.items || [];
-    energyPriceData.value = items.length > 0 ? items[0].values : [];
+    // 并行获取自主报价和理性报价的出清电价数据
+    const [selfRes, rationalRes] = await Promise.all([
+      marketApi.getClearingPrice(selectedUnitId.value, currentDay.value, false), // 自主报价
+      marketApi.getClearingPrice(selectedUnitId.value, currentDay.value, true)   // 理性报价
+    ]);
+    
+    const selfItems = selfRes.data.items || [];
+    const rationalItems = rationalRes.data.items || [];
+    
+    energyPriceData.value = selfItems.length > 0 ? selfItems[0].values : [];
+    rationalEnergyPriceData.value = rationalItems.length > 0 ? rationalItems[0].values : [];
   } catch (e) { 
     console.error("获取出清电价失败", e); 
   }
@@ -602,10 +928,12 @@ async function fetchEnergyPriceChart() {
 
 
 // 初始化数据
-onMounted(() => {
+onMounted(async () => {
+  await fetchCompanies();
   fetchSettlementData();
   fetchHistoryDetail();
-  fetchEnergyPriceChart();
+  await fetchEnergyPriceChart();
+  await fetchUnitBidResults();
 });
 </script>
 

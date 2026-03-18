@@ -48,24 +48,48 @@
 <script setup lang="ts">
 import { ref, onMounted } from "vue";
 import { marketApi } from "../api/market";
+import { getCurrentAdmin } from "../api/admin";
 
 const g13Company = ref<any>(null);
 const error = ref<string | null>(null);
 const companiesList = ref<any[]>([]);
+const currentUser = ref<any>(null);
 
-async function fetchG13Company() {
+async function fetchCurrentUser() {
+  try {
+    const user = await getCurrentAdmin();
+    currentUser.value = user;
+    console.log("当前用户:", user);
+    return user;
+  } catch (e) {
+    console.error("获取用户信息失败", e);
+    error.value = "获取用户信息失败，请重新登录";
+    return null;
+  }
+}
+
+async function fetchCompanyByUsername() {
   try {
     error.value = null;
+    const user = await fetchCurrentUser();
+    if (!user) {
+      return;
+    }
+    
     const { data } = await marketApi.getCompanies();
     const companies = data.items || [];
     companiesList.value = companies;
     console.log("所有企业:", companies);
-    // 查找G13企业（通过名称）
-    g13Company.value = companies.find((c: any) => c.name === "G13") || null;
+    
+    // 根据用户的用户名查找对应的企业（假设用户名为企业代码，如 G13）
+    const companyCode = user.username;
+    g13Company.value = companies.find((c: any) => c.name === companyCode) || null;
+    
     if (!g13Company.value) {
-      console.log("未找到G13企业，企业列表:", companies.map((c: any) => ({ id: c.id, name: c.name })));
+      console.log(`未找到${companyCode}企业，企业列表:`, companies.map((c: any) => ({ id: c.id, name: c.name })));
+      error.value = `未找到与当前用户 ${companyCode} 对应的企业信息`;
     } else {
-      console.log("找到G13企业:", g13Company.value);
+      console.log(`找到${companyCode}企业:`, g13Company.value);
     }
   } catch (e) { 
     console.error("获取企业信息失败", e); 
@@ -74,7 +98,7 @@ async function fetchG13Company() {
 }
 
 onMounted(() => {
-  fetchG13Company();
+  fetchCompanyByUsername();
 });
 </script>
 

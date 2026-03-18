@@ -1,13 +1,15 @@
-"""电力市场平台API"""
+"""电力市场平台 API"""
 from __future__ import annotations
-
-from typing import Optional, List
+from datetime import datetime, timedelta, date as date_type
+from typing import Optional, List, Dict, Any
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
+from app.models.admin import AdminUser
 from app.api.deps import get_current_admin
+from app.db.session import SessionLocal
 from app.db.deps import get_db
 from app.models.market import (
     MarketThermalPlant,
@@ -18,7 +20,13 @@ from app.models.market import (
     MarketOutResult,
     MarketDayAheadQuote,
     MarketLoad,
+    InputDayAheadUnitQuote,
+    OutputEnergyMarketOverview,
+    OutputThermalPlantRevenue
 )
+from app.models.price_prediction import PricePrediction
+from app.models.output_power_balance import OutputPowerBalanceSheet, OutputUnitBidResults
+from app.services.power_balance_service import PowerBalanceService
 
 router = APIRouter()
 
@@ -73,16 +81,16 @@ def get_wind_units(
     db: Session = Depends(get_db),
     _admin=Depends(get_current_admin),
 ):
-    """获取风电机组列表"""
+    """获取风电场列表"""
     units = db.query(MarketWindUnit).order_by(MarketWindUnit.id).all()
     return {
         "items": [
             {
-                "id": u.unit_id,
-                "name": u.unit_name,
+                "id": u.id,
+                "name": u.name,
                 "bus": u.bus_id,
                 "capacity": u.capacity,
-                "curveName": u.curve_name,
+                "power_factor": u.power_factor,
             }
             for u in units
         ]
@@ -94,79 +102,88 @@ def get_solar_units(
     db: Session = Depends(get_db),
     _admin=Depends(get_current_admin),
 ):
-    """获取光伏机组列表"""
+    """获取光伏电站列表"""
     units = db.query(MarketSolarUnit).order_by(MarketSolarUnit.id).all()
     return {
         "items": [
             {
-                "id": u.unit_id,
-                "name": u.unit_name,
+                "id": u.id,
+                "name": u.name,
                 "bus": u.bus_id,
                 "capacity": u.capacity,
-                "curveName": u.curve_name,
+                "power_factor": u.power_factor,
             }
             for u in units
         ]
     }
 
 
-# ==================== 成交历史 ====================
+# ==================== 电价预测 ====================
 
-@router.get("/clearing-history")
-def get_clearing_history(
-    metric: Optional[str] = None,
-    start: int = 0,
-    limit: int = 96,
+@router.get("/price-predictions")
+def get_price_predictions(
+    day: int = Query(..., description="天数，1-7"),
+    model: str = Query(..., description="预测模型名称"),
     db: Session = Depends(get_db),
-    _admin=Depends(get_current_admin),
+    _admin=Depends(get_current_admin)
 ):
-    """获取成交历史数据
-    metric: 指标名称(出清电价/风电消纳功率/光伏消纳功率/总负荷功率/供需比)，为空返回所有
-    start/limit: 时段范围切片
-    """
-    query = db.query(MarketClearingHistory)
-    if metric:
-        query = query.filter(MarketClearingHistory.metric_name == metric)
-    rows = query.all()
-    result = []
-    for r in rows:
-        values = r.period_values
-        sliced = values[start:start + limit] if isinstance(values, list) else []
-        result.append({
-            "metric_name": r.metric_name,
-            "total_periods": r.total_periods,
-            "values": sliced,
-        })
-    return {"items": result, "start": start, "limit": limit}
-
-
-# ==================== 信息披露 (出清结果) ====================
-
-@router.get("/out-results")
-def get_out_results(
-    sheet: str = "energy_price",
-    row_index: Optional[int] = None,
-    db: Session = Depends(get_db),
-    _admin=Depends(get_current_admin),
-):
-    """获取市场出清结果数据
-    sheet: out.xlsx中的sheet名称
-    row_index: 指定行索引，为空返回全部行
-    """
-    query = db.query(MarketOutResult).filter(MarketOutResult.sheet_name == sheet)
-    if row_index is not None:
-        query = query.filter(MarketOutResult.row_index == row_index)
-    rows = query.order_by(MarketOutResult.row_index).all()
-    return {
-        "items": [
-            {
-                "sheet_name": r.sheet_name,
-                "row_index": r.row_index,
-                "values": r.period_values,
-            }
-            for r in rows
-        ]
-    }
+    """获取电价预测数据"""
+    try:
+        # 根据 day 计算对应的日期
+        # 第一天对应 2026-01-01（数据库实际起始日期），第二天对应 2026-01-02，以此类推
+        base_date = "2026-03-19"
+        # 计算目标日期
+        date_obj = datetime.strptime(base_date, "%Y-%m-%d")
+        target_date_obj = date_obj + timedelta(days=day-1)
+        target_day = target_date_obj.strftime("%Y-%m-%d")
+        
+        # 查询该日期的所有时段数据
+        predictions = db.query(PricePrediction).filter(
+            PricePrediction.day == target_day
+        ).all()
+        
+        # 按时段排序（确保 96 个时段按顺序返回）
+        predictions.sort(key=lambda x: x.period)
+        
+        # 提取指定模型的预测值
+        values = []
+        q05_values = []  # 95%概率区间下限
+        q95_values = []  # 95%概率区间上限
+        
+        for pred in predictions:
+            if model == "true":
+                values.append(pred.true_price)
+                q05_values.append(pred.true_price)  # 实际价格没有区间
+                q95_values.append(pred.true_price)
+            elif model == "mamba":
+                values.append(pred.Mamba_q0_5)
+                q05_values.append(pred.Mamba_q0_05 if hasattr(pred, 'Mamba_q0_05') else pred.Mamba_q0_5)
+                q95_values.append(pred.Mamba_q0_95 if hasattr(pred, 'Mamba_q0_95') else pred.Mamba_q0_5)
+            elif model == "tcn":
+                values.append(pred.TCN_q0_5)
+                q05_values.append(pred.TCN_q0_05 if hasattr(pred, 'TCN_q0_05') else pred.TCN_q0_5)
+                q95_values.append(pred.TCN_q0_95 if hasattr(pred, 'TCN_q0_95') else pred.TCN_q0_5)
+            elif model == "ensemble":
+                values.append(pred.Ensemble_q0_5)
+                q05_values.append(pred.Ensemble_q0_05 if hasattr(pred, 'Ensemble_q0_05') else pred.Ensemble_q0_5)
+                q95_values.append(pred.Ensemble_q0_95 if hasattr(pred, 'Ensemble_q0_95') else pred.Ensemble_q0_5)
+            elif model == "naive":
+                values.append(pred.NLinear_q0_5)
+                q05_values.append(pred.NLinear_q0_5)
+                q95_values.append(pred.NLinear_q0_5)
+            else:
+                # 默认返回实际价格
+                values.append(pred.true_price)
+                q05_values.append(pred.true_price)
+                q95_values.append(pred.true_price)
+        
+        return {"items": [{"values": values, "q05_values": q05_values, "q95_values": q95_values}]}
+    except Exception as e:
+        # 返回空数组但保持正确的响应格式
+        print(f"获取电价预测数据失败：{e}")
+        import traceback
+        traceback.print_exc()
+        return {"items": [{"values": [], "q05_values": [], "q95_values": []}]}
 
 
 # ==================== 市场交易 ====================
@@ -199,272 +216,507 @@ def get_day_ahead_quotes(
     }
 
 
+@router.get("/input-day-ahead-quotes")
+def get_input_day_ahead_quotes(
+    unit_id: Optional[str] = None,
+    data_date: Optional[str] = None,
+    use_default_case: bool = False,
+    db: Session = Depends(get_db),
+    current_admin=Depends(get_current_admin),
+):
+    """获取输入日前市场报价
+    根据用户名动态确定 case_id：用户名 G15 -> case_id Input15
+    当 use_default_case 为 True 时，使用默认 case_id Input0
+    """
+    # 确定 case_id
+    if use_default_case:
+        # 未点击策略报价按钮时，使用默认 case_id Input0
+        case_id = "Input0"
+    else:
+        # 点击策略报价按钮后，根据用户名生成 case_id
+        username = current_admin.username
+        import re
+        match = re.search(r'\d+', username)
+        if match:
+            num = match.group()
+            case_id = f"Input{num}"
+        else:
+            # 如果没有数字，默认使用 Input0
+            case_id = "Input0"
+    
+    # 记录调试信息
+    print(f"[DEBUG] 查询条件：unit_id={unit_id}, data_date={data_date}, case_id={case_id}, username={current_admin.username}")
+    
+    # 构建查询
+    query = db.query(InputDayAheadUnitQuote)
+    
+    # 首先尝试使用指定的 case_id 查询
+    if case_id:
+        query = query.filter(InputDayAheadUnitQuote.case_id == case_id)
+    if unit_id:
+        query = query.filter(InputDayAheadUnitQuote.UnitId == unit_id)
+    if data_date:
+        query = query.filter(InputDayAheadUnitQuote.data_date == data_date)
+    
+    # 执行查询
+    quotes = query.order_by(
+        InputDayAheadUnitQuote.QuoteTime,
+        InputDayAheadUnitQuote.QuoteSection
+    ).all()
+    
+    # 记录查询结果数量
+    print(f"[DEBUG] 查询结果数量：{len(quotes)}")
+    
+    # 如果查询结果为空，尝试使用 Input0 case_id 查询
+    if not quotes:
+        print(f"[WARNING] 未找到数据，尝试使用 Input0 case_id 查询...")
+        query = db.query(InputDayAheadUnitQuote)
+        query = query.filter(InputDayAheadUnitQuote.case_id == "Input0")
+        if unit_id:
+            query = query.filter(InputDayAheadUnitQuote.UnitId == unit_id)
+        if data_date:
+            query = query.filter(InputDayAheadUnitQuote.data_date == data_date)
+        
+        quotes = query.order_by(
+            InputDayAheadUnitQuote.QuoteTime,
+            InputDayAheadUnitQuote.QuoteSection
+        ).all()
+        
+        print(f"[DEBUG] 使用 Input0 case_id 查询结果数量：{len(quotes)}")
+    
+    # 如果仍然为空，记录详细信息以便调试
+    if not quotes:
+        print(f"[WARNING] 仍然未找到数据，尝试诊断问题...")
+        # 检查该日期是否有其他 case_id 的数据
+        if data_date:
+            available_cases = db.query(InputDayAheadUnitQuote.case_id).filter(
+                InputDayAheadUnitQuote.data_date == data_date
+            ).distinct().all()
+            print(f"[DEBUG] 该日期可用的 case_id: {[c[0] for c in available_cases]}")
+        
+        # 检查该机组是否有数据
+        if data_date:
+            available_units = db.query(InputDayAheadUnitQuote.UnitId).filter(
+                InputDayAheadUnitQuote.data_date == data_date
+            ).distinct().all()
+            print(f"[DEBUG] 该日期可用的机组：{[u[0] for u in available_units]}")
+        
+        # 检查是否有任何数据
+        total_count = db.query(InputDayAheadUnitQuote).count()
+        print(f"[DEBUG] 表中总数据量：{total_count}")
+    
+    return {
+        "items": [
+            {
+                "quote_id": q.QuoteId,
+                "unit_id": q.UnitId,
+                "market_name": q.MarketName,
+                "quote_time": q.QuoteTime,
+                "quote_section": q.QuoteSection,
+                "quote_price": q.QuotePrice,
+                "quote_capacity": q.QuoteCapacity,
+                "is_used": q.IsUsed,
+                "case_id": q.case_id,
+                "data_date": q.data_date,
+            }
+            for q in quotes
+        ]
+    }
 
+
+# ==================== 出清结果 ====================
+
+@router.get("/out-results")
+def get_out_results(
+    sheet: str = Query(..., description="工作表名称"),
+    row_index: Optional[int] = Query(None, description="行索引"),
+    db: Session = Depends(get_db),
+    _admin=Depends(get_current_admin),
+):
+    """获取市场出清结果"""
+    query = db.query(MarketOutResult).filter(
+        MarketOutResult.sheet_name == sheet
+    )
+    
+    if row_index is not None:
+        query = query.filter(MarketOutResult.row_index == row_index)
+    
+    results = query.order_by(
+        MarketOutResult.row_index
+    ).all()
+    
+    # 转换为前端需要的格式
+    # 每条记录的 period_values 就是一个包含 96 个时段的数组
+    items = []
+    for r in results:
+        # period_values 是 JSON 类型，已经是列表
+        values = r.period_values if r.period_values else []
+        # 确保值是浮点数类型
+        values = [float(v) if v is not None else 0.0 for v in values]
+        
+        items.append({
+            "row_index": r.row_index,
+            "values": values
+        })
+    
+    return {"items": items}
+
+
+# ==================== 电能量市场出清电价 ====================
+
+from app.models.market import OutputClearingPrice, MarketThermalUnit
+
+@router.get("/clearing-price")
+def get_clearing_price(
+    unit_id: str = Query(..., description="机组 ID，如 Thermal_1"),
+    day_index: int = Query(1, description="第几天，从 1 开始（第一天=20260319）"),
+    use_default_case: bool = Query(False, description="是否使用默认案例 Output0（理性申报），false 则使用用户关联案例（自主申报）"),
+    db: Session = Depends(get_db),
+    current_admin=Depends(get_current_admin),
+):
+    """获取电能量市场出清电价数据
+    
+    支持根据登录用户名和日期动态获取对应的出清电价数据
+    - 自主申报：use_default_case=false，根据用户名生成 case_id（如 G14->Output14）
+    - 理性申报：use_default_case=true，固定使用 Output0
+    
+    :param unit_id: 机组 ID，用于查找所属母线
+    :param day_index: 第几天，从 1 开始计数，第一天为 20260319
+    :param use_default_case: 是否使用默认案例 Output0
+                           - true: 使用 Output0（理性申报）
+                           - false: 使用用户名关联的 case_id（自主申报，如 G14->Output14）
+    :return: 包含 bus_id, price_type, t1-t96, case_id, date_str 的数据对象
+    """
+    try:
+        # 基础日期
+        base_date_str = "20260319"
+        
+        # 计算实际日期（day_index 从 1 开始，所以偏移量为 day_index - 1）
+        day_offset = day_index - 1
+        
+        # 获取当前用户名
+        username = current_admin.username
+        
+        # 根据参数决定使用的 case_id
+        if use_default_case:
+            # 理性申报：固定使用 Output0
+            case_id = "Output0"
+        else:
+            # 自主申报：根据用户名生成 case_id（如 G14 -> Output14）
+            # 提取用户名中的数字部分
+            import re
+            match = re.search(r'\d+', username)
+            if match:
+                case_num = match.group()
+                case_id = f"Output{case_num}"
+            else:
+                # 如果用户名中没有数字，降级处理使用 Output0
+                print(f"[出清电价 API] 警告：用户名 {username} 中没有数字，使用 Output0")
+                case_id = "Output0"
+        
+        # 计算查询日期
+        from datetime import timedelta
+        base_date = datetime.strptime(base_date_str, "%Y%m%d")
+        query_date = base_date + timedelta(days=day_offset)
+        query_date_str = query_date.strftime("%Y%m%d")
+        
+        print(f"\n[出清电价 API] 请求参数:")
+        print(f"  unit_id: {unit_id}")
+        print(f"  day_index: {day_index}")
+        print(f"  use_default_case: {use_default_case}")
+        print(f"  username: {username}")
+        print(f"  生成的 case_id: {case_id}")
+        print(f"  查询的日期：{query_date_str}")
+        
+        # 查询机组信息，获取 bus_id
+        unit = db.query(MarketThermalUnit).filter(
+            MarketThermalUnit.unit_id == unit_id
+        ).first()
+        
+        if not unit:
+            print(f"[出清电价 API] 错误：未找到机组 {unit_id}")
+            return {
+                "items": [],
+                "case_id": case_id,
+                "date_str": query_date_str
+            }
+        
+        bus_id = unit.bus_id
+        print(f"  机组 {unit_id} 的 bus_id: {bus_id}")
+        
+        # 导入 OutputClearingPrice 模型
+        from app.models.market import OutputClearingPrice
+        
+        # 查询出清价格数据
+        clearing_price_record = db.query(OutputClearingPrice).filter(
+            OutputClearingPrice.case_id == case_id,
+            OutputClearingPrice.date_str == query_date_str,
+            OutputClearingPrice.bus_id == bus_id,
+            OutputClearingPrice.price_type == "电能量电价"
+        ).first()
+        
+        if not clearing_price_record:
+            print(f"[出清电价 API] 警告：未找到数据 - case_id={case_id}, date={query_date_str}, bus={bus_id}")
+            return {
+                "items": [],
+                "case_id": case_id,
+                "date_str": query_date_str
+            }
+        
+        # 构建返回数据
+        item = {
+            "bus_id": clearing_price_record.bus_id,
+            "price_type": clearing_price_record.price_type,
+            "case_id": clearing_price_record.case_id,
+            "date_str": clearing_price_record.date_str,
+            "values": [
+                getattr(clearing_price_record, f't{i}', None) 
+                for i in range(1, 97)
+            ]
+        }
+        
+        print(f"[出清电价 API] 成功获取数据，共 {len([v for v in item['values'] if v is not None])} 个有效数据点")
+        
+        return {
+            "items": [item],
+            "case_id": case_id,
+            "date_str": query_date_str
+        }
+    
+    except Exception as e:
+        print(f"[出清电价 API] 获取数据失败：{e}")
+        import traceback
+        traceback.print_exc()
+        return {
+            "items": [],
+            "case_id": "Output0",
+            "date_str": ""
+        }
 
 
 # ==================== 结算报告 ====================
 
 @router.get("/settlement-overview")
 def get_settlement_overview(
+    day_index: int = 1,  # 第几天，从 1 开始
+    use_default_case: bool = False,  # 是否使用默认案例 Output0
     db: Session = Depends(get_db),
-    _admin=Depends(get_current_admin),
+    current_user: AdminUser = Depends(get_current_admin),
 ):
-    """获取结算报告市场总览数据 - 从数据库聚合计算"""
-    # 机组统计
-    thermal_count = db.query(MarketThermalUnit).count()
-    wind_count = db.query(MarketWindUnit).count()
-    solar_count = db.query(MarketSolarUnit).count()
-    plant_count = db.query(MarketThermalPlant).count()
-
-    thermal_cap = db.query(func.sum(MarketThermalUnit.capacity)).scalar() or 0
-    wind_cap = db.query(func.sum(MarketWindUnit.capacity)).scalar() or 0
-    solar_cap = db.query(func.sum(MarketSolarUnit.capacity)).scalar() or 0
-    total_cap = float(thermal_cap) + float(wind_cap) + float(solar_cap)
-
-    # 从出清结果获取电价数据
-    energy_rows = db.query(MarketOutResult).filter(
-        MarketOutResult.sheet_name == "energy_price"
-    ).all()
-
-    all_prices = []
-    for r in energy_rows:
-        if isinstance(r.period_values, list):
-            all_prices.extend([float(v) for v in r.period_values if v])
-
-    max_price = max(all_prices) if all_prices else 0
-    min_price = min(all_prices) if all_prices else 0
-    avg_price = sum(all_prices) / len(all_prices) if all_prices else 0
-
-    # 火电运行功率
-    thermal_power_rows = db.query(MarketOutResult).filter(
-        MarketOutResult.sheet_name == "thermal_tg_opera_power"
-    ).all()
-    total_output = 0
-    for r in thermal_power_rows:
-        if isinstance(r.period_values, list):
-            total_output += sum(float(v) for v in r.period_values if v)
-
-    # 成交历史供需比
-    ratio_row = db.query(MarketClearingHistory).filter(
-        MarketClearingHistory.metric_name == "供需比"
-    ).first()
-    avg_ratio = 0
-    if ratio_row and isinstance(ratio_row.period_values, list) and ratio_row.period_values:
-        avg_ratio = sum(ratio_row.period_values) / len(ratio_row.period_values)
-
-    # 日前报价统计
-    quote_count = db.query(MarketDayAheadQuote).count()
-    avg_quote_price = db.query(func.avg(MarketDayAheadQuote.quote_price)).scalar() or 0
-    total_quote_quantity = db.query(func.sum(MarketDayAheadQuote.quote_quantity)).scalar() or 0
-
-
-
-    # 中标机组数（运行功率>0的机组）
-    bid_units = 0
-    for r in thermal_power_rows:
-        if isinstance(r.period_values, list):
-            if any(float(v) > 0 for v in r.period_values if v):
-                bid_units += 1
-    # 加上风电和光伏
-    wind_power_rows = db.query(MarketOutResult).filter(
-        MarketOutResult.sheet_name == "wind_wt_opera_power"
-    ).all()
-    solar_power_rows = db.query(MarketOutResult).filter(
-        MarketOutResult.sheet_name == "solar_pv_opera_power"
-    ).all()
-    for r in wind_power_rows + solar_power_rows:
-        if isinstance(r.period_values, list):
-            if any(float(v) > 0 for v in r.period_values if v):
-                bid_units += 1
-
-    # 总交易额 = sum(电价 * 出力) 的近似值
-    total_revenue = round(total_output * avg_price / 10000, 6) if avg_price else 0
-
-    # 风电总出力
-    wind_total_output = 0
-    for r in wind_power_rows:
-        if isinstance(r.period_values, list):
-            wind_total_output += sum(float(v) for v in r.period_values if v)
-
-    # 光伏总出力
-    solar_total_output = 0
-    for r in solar_power_rows:
-        if isinstance(r.period_values, list):
-            solar_total_output += sum(float(v) for v in r.period_values if v)
-
-    # 负荷总量
-    load_rows = db.query(MarketOutResult).filter(
-        MarketOutResult.sheet_name == "load_load_bid_power"
-    ).all()
-    total_load = 0
-    for r in load_rows:
-        if isinstance(r.period_values, list):
-            total_load += sum(float(v) for v in r.period_values if v)
-
-    # 总发电量 = 火电+风电+光伏
-    total_generation = total_output + wind_total_output + solar_total_output
-
-    # 新能源弃电量
-    wind_curtailment = 0  # 当前数据中无弃电
-    max_re_curtailment_ratio = 0
-
-    # 申报机组数 = 有报价的机组数
-    quote_unit_count = db.query(MarketDayAheadQuote.unit_id).distinct().count()
-
-    energy_market = {
-        "total_capacity": round(total_cap, 2),
-        "wind_count": wind_count,
-        "wind_capacity": round(float(wind_cap), 2),
-        "solar_count": solar_count,
-        "solar_capacity": round(float(solar_cap), 2),
-        "hydro_count": 0,
-        "hydro_capacity": 0,
-        "thermal_count": thermal_count,
-        "thermal_capacity": round(float(thermal_cap), 2),
-        "storage_count": 0,
-        "pumped_storage_count": 0,
-        "plant_count": plant_count,
-        "total_output": round(total_output + wind_total_output + solar_total_output, 6),
-        "avg_price": round(avg_price, 6),
-        "supply_demand_ratio": round(avg_ratio, 6),
-        "total_revenue": round(total_revenue, 6),
-        "congestion": "",
-        "congestion_surplus": 0,
-        "quote_unit_count": quote_unit_count,
-        "bid_units": bid_units,
-        "quote_quantity": round(float(total_quote_quantity), 2),
-        "avg_quote_price": round(float(avg_quote_price), 6),
-        "max_node_price": round(max_price, 6),
-        "min_node_price": round(min_price, 6),
-        "transmission_loss": 0,
-        "total_generation": round(total_generation, 6),
-        "total_consumption": round(total_load, 6),
-        "re_curtailment": round(wind_curtailment, 6),
-        "max_re_curtailment_ratio": round(max_re_curtailment_ratio, 6),
-        "total_load_shedding": 0,
-        "max_load_loss_ratio": 0,
-    }
-
-    return {
-        "energy_market": energy_market,
-    }
+    """获取结算概览数据（支持日期切换和案例选择）"""
+    try:
+        print("=" * 80)
+        print("【调试信息】/api/market/settlement-overview")
+        
+        username = current_user.username
+        print(f"当前用户对象：{current_user}")
+        print(f"当前用户名：{username}")
+        print(f"当前用户 email: {getattr(current_user, 'email', 'N/A')}")
+        
+        # 根据 use_default_case 参数决定使用哪个 case_id
+        if use_default_case:
+            case_id = "Output0"
+            print(f"使用默认案例：{case_id} (理性申报)")
+        else:
+            # 从用户名中提取数字部分，如 G13 -> 13, admin -> 0
+            import re
+            match = re.search(r'\d+', username)
+            if match:
+                num = match.group()
+                case_id = f"Output{num}"
+            else:
+                case_id = "Output0"
+            print(f"使用用户关联案例：{case_id} (自主申报)")
+        
+        # 根据第几天计算实际日期（第一天=20260319）
+        from datetime import datetime, timedelta
+        base_date = datetime(2026, 3, 19)  # 起始日期
+        target_date = base_date + timedelta(days=day_index - 1)
+        date_str = target_date.strftime("%Y%m%d")
+        print(f"请求的日期索引：第 {day_index} 天")
+        print(f"计算得到的日期：{date_str}")
+        
+        # 先查询该 case_id 下有哪些日期
+        from sqlalchemy import distinct
+        available_dates = db.query(distinct(OutputEnergyMarketOverview.date_str)).filter(
+            OutputEnergyMarketOverview.case_id == case_id
+        ).all()
+        available_dates_list = [d[0] for d in available_dates]
+        print(f"数据库中 {case_id} 的可用日期：{available_dates_list}")
+        
+        # 检查计算的日期是否在数据库中存在
+        if date_str not in available_dates_list:
+            print(f"⚠️ 警告：计算日期 {date_str} 不在数据库中")
+            # 如果不存在，使用最接近的可用日期
+            valid_dates = [d for d in available_dates_list if d >= date_str]
+            if valid_dates:
+                date_str = min(valid_dates)
+                print(f"使用之后的第一个可用日期：{date_str}")
+            elif available_dates_list:
+                date_str = max(available_dates_list)
+                print(f"没有之后的日期，使用最新日期：{date_str}")
+        
+        # 查询指定日期的所有记录
+        records = db.query(OutputEnergyMarketOverview).filter(
+            OutputEnergyMarketOverview.case_id == case_id,
+            OutputEnergyMarketOverview.date_str == date_str
+        ).all()
+        
+        if records and len(records) > 0:
+            print(f"成功找到日期 {date_str} 的数据，共 {len(records)} 条记录")
+        else:
+            print(f"警告：case_id '{case_id}' 在日期 {date_str} 没有找到数据")
+            return {"energy_market": {}}
+        
+        # 将行转列数据转换为字典
+        data_dict = {}
+        for record in records:
+            key = record.market_name
+            value = record.spot_market
+            data_dict[key] = value
+            print(f"  [{key}] = {value}")
+        
+        print(f"data_dict 共有 {len(data_dict)} 个字段")
+        
+        # 构造返回数据结构
+        overview_data = {
+            "energy_market": {}
+        }
+        
+        if data_dict:
+            # 将中文键名转换为英文键名，以匹配前端期望的格式
+            overview_data["energy_market"] = {
+                "avg_price": data_dict.get("成交均价(元/MWh)", 0) if data_dict.get("成交均价(元/MWh)") is not None else 0.0,
+                "max_node_price": data_dict.get("最高节点电价(元/MWh)", 0) if data_dict.get("最高节点电价(元/MWh)") is not None else 0.0,
+                "min_node_price": data_dict.get("最低节点电价(元/MWh)", 0) if data_dict.get("最低节点电价(元/MWh)") is not None else 0.0,
+                "avg_quote_price": data_dict.get("申报均价(元/MWh)", 0) if data_dict.get("申报均价(元/MWh)") is not None else 0.0,
+                "supply_demand_ratio": data_dict.get("供需比", 0) if data_dict.get("供需比") is not None else 0.0,
+                "total_generation": data_dict.get("总发电量(100MWh)", 0) * 100 if data_dict.get("总发电量(100MWh)") is not None else 0.0,
+                "total_consumption": data_dict.get("总用电量(100MWh)", 0) * 100 if data_dict.get("总用电量(100MWh)") is not None else 0.0,
+                "re_curtailment": data_dict.get("新能源总弃电量(100MWh)", 0) * 100 if data_dict.get("新能源总弃电量(100MWh)") is not None else 0.0,
+                "quote_quantity": data_dict.get("申报出力(MW)", 0) if data_dict.get("申报出力(MW)") is not None else 0.0,
+                "total_output": data_dict.get("成交总出力(100MW)", 0) if data_dict.get("成交总出力(100MW)") is not None else 0.0,
+                "total_capacity": data_dict.get("总装机容量(100MW)", 0) if data_dict.get("总装机容量(100MW)") is not None else 0.0,
+                "plant_count": int(data_dict.get("发电企业数目", 0)) if data_dict.get("发电企业数目") is not None else 0,
+                "quote_unit_count": int(data_dict.get("申报机组数目", 0)) if data_dict.get("申报机组数目") is not None else 0,
+                "bid_units": int(data_dict.get("中标机组数目", 0)) if data_dict.get("中标机组数目") is not None else 0,
+                "total_revenue": data_dict.get("总交易额(万元)", 0) if data_dict.get("总交易额(万元)") is not None else 0.0,
+                "wind_count": int(data_dict.get("风电数", 0)) if data_dict.get("风电数") is not None else 0,
+                "solar_count": int(data_dict.get("光伏数", 0)) if data_dict.get("光伏数") is not None else 0,
+                "hydro_count": int(data_dict.get("水电数", 0)) if data_dict.get("水电数") is not None else 0,
+                "thermal_count": int(data_dict.get("火电数", 0)) if data_dict.get("火电数") is not None else 0,
+                "battery_count": int(data_dict.get("电化学储能数", 0)) if data_dict.get("电化学储能数") is not None else 0,
+                "pumped_count": int(data_dict.get("抽蓄电站数", 0)) if data_dict.get("抽蓄电站数") is not None else 0,
+                "wind_capacity": data_dict.get("风电装机容量(100MW)", 0) if data_dict.get("风电装机容量(100MW)") is not None else 0.0,
+                "solar_capacity": data_dict.get("光伏装机容量(100MW)", 0) if data_dict.get("光伏装机容量(100MW)") is not None else 0.0,
+                "hydro_capacity": data_dict.get("水电装机容量(100MW)", 0) if data_dict.get("水电装机容量(100MW)") is not None else 0.0,
+                "thermal_capacity": data_dict.get("火电装机容量(100MW)", 0) if data_dict.get("火电装机容量(100MW)") is not None else 0.0,
+                "congestion_status": data_dict.get("阻塞情况", "无"),
+                "congestion_surplus": data_dict.get("阻塞盈余(万元)", 0) if data_dict.get("阻塞盈余(万元)") is not None else 0.0,
+            }
+            
+            print("\n返回前端的数据:")
+            for k, v in overview_data["energy_market"].items():
+                print(f"  {k}: {v}")
+        
+        print("=" * 80)
+        
+        return overview_data
+    except Exception as e:
+        print(f"获取结算概览失败：{e}")
+        import traceback
+        traceback.print_exc()
+        return {"energy_market": {}}
+    finally:
+        # 确保数据库会话被关闭
+        if 'db' in locals():
+            db.close()
 
 
 @router.get("/settlement-detail")
 def get_settlement_detail(
+    day_index: int = 1,  # 第几天，从 1 开始
+    use_default_case: bool = False,  # 是否使用默认案例 Output0
     db: Session = Depends(get_db),
     _admin=Depends(get_current_admin),
 ):
-    """获取结算详情 - 按火电厂汇总"""
-    plants = db.query(MarketThermalPlant).order_by(MarketThermalPlant.id).all()
-
-    # 获取所有火电运行数据
-    opera_power = db.query(MarketOutResult).filter(
-        MarketOutResult.sheet_name == "thermal_tg_opera_power"
-    ).order_by(MarketOutResult.row_index).all()
-
-    quote_cost = db.query(MarketOutResult).filter(
-        MarketOutResult.sheet_name == "thermal_tg_quote_cost"
-    ).order_by(MarketOutResult.row_index).all()
-
-    start_flags = db.query(MarketOutResult).filter(
-        MarketOutResult.sheet_name == "thermal_tg_start_flag"
-    ).order_by(MarketOutResult.row_index).all()
-
-    off_flags = db.query(MarketOutResult).filter(
-        MarketOutResult.sheet_name == "thermal_tg_off_flag"
-    ).order_by(MarketOutResult.row_index).all()
-
-    # 获取节点电价
-    energy_prices = db.query(MarketOutResult).filter(
-        MarketOutResult.sheet_name == "energy_price"
-    ).order_by(MarketOutResult.row_index).all()
-
-    # 机组到电厂映射
-    units = db.query(MarketThermalUnit).order_by(MarketThermalUnit.id).all()
-    unit_plant_map = {u.unit_id: u.plant_id for u in units}
-    unit_start_cost_map = {u.unit_id: u.start_cost for u in units}
-    unit_stop_cost_map = {u.unit_id: u.stop_cost for u in units}
-
-    # 按电厂聚合
-    plant_data = {}
-    for p in plants:
-        plant_data[p.plant_id] = {
-            "id": p.plant_id,
-            "name": p.name,
-            "opCost": 0,
-            "startCost": 0,
-            "stopCost": 0,
-            "output": 0,
-            "revenue": 0,
-        }
-
-    # 按行索引对应机组 (row_index 0 -> Thermal_1, etc.)
-    for idx, row in enumerate(opera_power):
-        unit_id = f"Thermal_{idx + 1}"
-        plant_id = unit_plant_map.get(unit_id)
-        if not plant_id or plant_id not in plant_data:
-            continue
-        vals = row.period_values if isinstance(row.period_values, list) else []
-        total_power = sum(float(v) for v in vals if v)
-        plant_data[plant_id]["output"] += total_power
-
-    for idx, row in enumerate(quote_cost):
-        unit_id = f"Thermal_{idx + 1}"
-        plant_id = unit_plant_map.get(unit_id)
-        if not plant_id or plant_id not in plant_data:
-            continue
-        vals = row.period_values if isinstance(row.period_values, list) else []
-        total_cost = sum(float(v) for v in vals if v)
-        plant_data[plant_id]["opCost"] += total_cost
-
-    for idx, row in enumerate(start_flags):
-        unit_id = f"Thermal_{idx + 1}"
-        plant_id = unit_plant_map.get(unit_id)
-        if not plant_id or plant_id not in plant_data:
-            continue
-        vals = row.period_values if isinstance(row.period_values, list) else []
-        starts = sum(1 for v in vals if float(v) > 0)
-        plant_data[plant_id]["startCost"] += starts * unit_start_cost_map.get(unit_id, 0)
-
-    for idx, row in enumerate(off_flags):
-        unit_id = f"Thermal_{idx + 1}"
-        plant_id = unit_plant_map.get(unit_id)
-        if not plant_id or plant_id not in plant_data:
-            continue
-        vals = row.period_values if isinstance(row.period_values, list) else []
-        stops = sum(1 for v in vals if float(v) > 0)
-        plant_data[plant_id]["stopCost"] += stops * unit_stop_cost_map.get(unit_id, 0)
-
-    # 计算均价和收益
-    avg_energy_price = 0
-    if energy_prices:
-        all_prices = []
-        for r in energy_prices:
-            if isinstance(r.period_values, list):
-                all_prices.extend([float(v) for v in r.period_values if v])
-        if all_prices:
-            avg_energy_price = sum(all_prices) / len(all_prices)
-
-    energy_rows = []
-    for pid in [p.plant_id for p in plants]:
-        d = plant_data[pid]
-        revenue = d["output"] * avg_energy_price / 10000
-        net = revenue - d["opCost"] - d["startCost"] - d["stopCost"]
-        avg_p = avg_energy_price if d["output"] > 0 else 0
-        energy_rows.append({
-            "id": d["id"],
-            "name": d["name"],
-            "opCost": round(d["opCost"], 3),
-            "startCost": round(d["startCost"], 3),
-            "stopCost": round(d["stopCost"], 3),
-            "output": round(d["output"], 3),
-            "avgPrice": round(avg_p, 3),
-            "revenue": round(revenue, 3),
-            "netIncome": round(net, 3),
-        })
-
-    return {"energy_rows": energy_rows}
+    """获取结算明细（支持日期切换和案例选择）"""
+    try:
+        # 获取当前用户的 case_id
+        username = _admin.username
+        
+        # 根据 use_default_case 参数决定使用哪个 case_id
+        if use_default_case:
+            case_id = "Output0"
+            print(f"使用默认案例：{case_id} (理性申报)")
+        else:
+            # 从用户名中提取数字部分，如 G13 -> 13, admin -> 0
+            import re
+            match = re.search(r'\d+', username)
+            if match:
+                num = match.group()
+                case_id = f"Output{num}"
+            else:
+                case_id = "Output0"
+            print(f"使用用户关联案例：{case_id} (自主申报)")
+        
+        # 根据第几天计算实际日期（第一天=20260319）
+        from datetime import datetime, timedelta
+        base_date = datetime(2026, 3, 19)  # 起始日期
+        target_date = base_date + timedelta(days=day_index - 1)
+        date_str = target_date.strftime("%Y%m%d")
+        print(f"请求的日期索引：第 {day_index} 天")
+        print(f"计算得到的日期：{date_str}")
+        
+        # 查询该 case_id 和 date_str 下的所有数据
+        results = db.query(OutputThermalPlantRevenue).filter(
+            OutputThermalPlantRevenue.case_id == case_id,
+            OutputThermalPlantRevenue.date_str == date_str
+        ).all()
+        
+        if not results:
+            print(f"警告：case_id '{case_id}' 在日期 {date_str} 没有找到数据")
+            print("尝试使用 Output0 作为默认 case_id...")
+            case_id = "Output0"
+            results = db.query(OutputThermalPlantRevenue).filter(
+                OutputThermalPlantRevenue.case_id == case_id,
+                OutputThermalPlantRevenue.date_str == date_str
+            ).all()
+        
+        if not results:
+            print(f"错误：默认 case_id '{case_id}' 也没有数据")
+            return {"energy_rows": []}
+        
+        # 转换为前端需要的格式
+        energy_rows = []
+        for r in results:
+            # 将字符串转换为浮点数，处理 None 值
+            def to_float(val):
+                if val is None:
+                    return 0.0
+                try:
+                    return float(val)
+                except (ValueError, TypeError):
+                    return 0.0
+            
+            energy_rows.append({
+                "id": r.unit_id or r.name or "",
+                "name": r.name or "",
+                "opCost": to_float(r.operation_cost),
+                "startCost": to_float(r.open_cost),
+                "stopCost": float(r.close_cost) if r.close_cost else 0.0,
+                "output": to_float(r.bid_quantity),
+                "avgPrice": to_float(r.bid_average_price),
+                "revenue": to_float(r.bid_revenue),
+                "netIncome": to_float(r.net_revenue),
+            })
+        
+        return {"energy_rows": energy_rows}
+    except Exception as e:
+        print(f"获取结算明细失败：{e}")
+        import traceback
+        traceback.print_exc()
+        return {"energy_rows": []}
 
 
 @router.get("/balance-chart")
@@ -472,63 +724,359 @@ def get_balance_chart(
     db: Session = Depends(get_db),
     _admin=Depends(get_current_admin),
 ):
-    """获取电力电量平衡图表数据"""
-    # 火电总功率
-    thermal_rows = db.query(MarketOutResult).filter(
-        MarketOutResult.sheet_name == "thermal_tg_opera_power"
-    ).all()
-    periods = 96
-    thermal_power = [0.0] * periods
-    for r in thermal_rows:
-        if isinstance(r.period_values, list):
-            for i, v in enumerate(r.period_values[:periods]):
-                thermal_power[i] += float(v) if v else 0
+    """获取收支平衡图数据"""
+    # TODO: 实现收支平衡图逻辑
+    return {"items": []}
 
-    # 风电消纳功率
-    wind_rows = db.query(MarketOutResult).filter(
-        MarketOutResult.sheet_name == "wind_wt_opera_power"
-    ).all()
-    wind_power = [0.0] * periods
-    for r in wind_rows:
-        if isinstance(r.period_values, list):
-            for i, v in enumerate(r.period_values[:periods]):
-                wind_power[i] += float(v) if v else 0
 
-    # 光伏功率
-    solar_rows = db.query(MarketOutResult).filter(
-        MarketOutResult.sheet_name == "solar_pv_opera_power"
-    ).all()
-    solar_power = [0.0] * periods
-    for r in solar_rows:
-        if isinstance(r.period_values, list):
-            for i, v in enumerate(r.period_values[:periods]):
-                solar_power[i] += float(v) if v else 0
+# ==================== 历史出清 ====================
 
-    # 水电功率
-    hydro_rows = db.query(MarketOutResult).filter(
-        MarketOutResult.sheet_name == "hydro_hp_opera_power"
-    ).all()
-    hydro_power = [0.0] * periods
-    for r in hydro_rows:
-        if isinstance(r.period_values, list):
-            for i, v in enumerate(r.period_values[:periods]):
-                hydro_power[i] += float(v) if v else 0
-
-    # 负荷功率
-    load_rows = db.query(MarketOutResult).filter(
-        MarketOutResult.sheet_name == "load_load_bid_power"
-    ).all()
-    load_power = [0.0] * periods
-    for r in load_rows:
-        if isinstance(r.period_values, list):
-            for i, v in enumerate(r.period_values[:periods]):
-                load_power[i] += float(v) if v else 0
-
+@router.get("/clearing-history")
+def get_clearing_history(
+    metric: str = Query("price", description="指标类型：price, load, wind, solar"),
+    start: int = Query(0, description="起始索引"),
+    limit: int = Query(100, description="数量限制"),
+    db: Session = Depends(get_db),
+    _admin=Depends(get_current_admin),
+):
+    """获取历史出清数据"""
+    query = db.query(MarketClearingHistory)
+    
+    # 根据指标类型过滤
+    if metric == "price":
+        query = query.filter(MarketClearingHistory.metric_name.like("%电价%"))
+    elif metric == "load":
+        query = query.filter(MarketClearingHistory.metric_name.like("%负荷%"))
+    elif metric == "wind":
+        query = query.filter(MarketClearingHistory.metric_name.like("%风电%"))
+    elif metric == "solar":
+        query = query.filter(MarketClearingHistory.metric_name.like("%光伏%"))
+    
+    # 排序并分页
+    results = query.order_by(
+        MarketClearingHistory.record_time.desc()
+    ).offset(start).limit(limit).all()
+    
     return {
-        "thermal": [round(v, 4) for v in thermal_power],
-        "wind": [round(v, 4) for v in wind_power],
-        "solar": [round(v, 4) for v in solar_power],
-        "hydro": [round(v, 4) for v in hydro_power],
-        "load": [round(v, 4) for v in load_power],
-        "periods": periods,
+        "items": [
+            {
+                "id": r.id,
+                "metric_name": r.metric_name,
+                "value": float(r.value) if r.value else 0,
+                "record_time": r.record_time.isoformat() if r.record_time else None,
+            }
+            for r in results
+        ]
     }
+
+
+@router.get("/power-balance")
+def get_power_balance(
+    date_str: str = Query(..., description="日期字符串，如 20260319"),
+    case_id: Optional[str] = Query(None, description="案例 ID，如 Output1，默认为当前用户的 case"),
+    db: Session = Depends(get_db),
+    current_admin=Depends(get_current_admin),
+):
+    """获取信息披露页面的功率平衡数据
+    根据用户名和日期查询对应的风电、光伏、负荷预测数据
+    用户名与 case_id 的对应关系：用户名 G13 -> case_id Output13
+    """
+    try:
+        # 如果未传入 case_id，根据用户名生成
+        if not case_id:
+            username = current_admin.username
+            # 提取用户名中的数字部分
+            import re
+            match = re.search(r'\d+', username)
+            if match:
+                num = match.group()
+                case_id = f"Output{num}"
+            else:
+                # 如果没有数字，默认使用 Output0
+                case_id = "Output0"
+        
+        # 查询该日期和 case_id 的所有数据
+        query = db.query(OutputPowerBalanceSheet).filter(
+            OutputPowerBalanceSheet.date_str == date_str,
+            OutputPowerBalanceSheet.case_id == case_id
+        )
+        
+        results = query.order_by(OutputPowerBalanceSheet.name).all()
+        
+        # 转换为前端需要的格式
+        items = []
+        for r in results:
+            # 使用 period_values 属性获取 t1-t96 的值
+            values = r.period_values
+            # 确保值是浮点数类型，处理 None 值
+            values = [float(v) if v is not None else 0.0 for v in values]
+            
+            items.append({
+                "name": r.name,
+                "values": values
+            })
+        
+        return {
+            "items": items,
+            "case_id": case_id,
+            "date_str": date_str
+        }
+    
+    except Exception as e:
+        print(f"获取功率平衡数据失败：{e}")
+        import traceback
+        traceback.print_exc()
+        return {
+            "items": [],
+            "case_id": "",
+            "date_str": ""
+        }
+
+
+# ==================== 自主申报 - 电力电量平衡结果 ====================
+
+@router.get("/energy-balance")
+def get_energy_balance(
+    day_index: int = Query(1, description="第几天，从 1 开始（第一天=20260319）"),
+    use_default_case: bool = Query(False, description="是否使用默认案例 Output0（理性申报），false 则使用用户关联案例（自主申报）"),
+    db: Session = Depends(get_db),
+    current_admin=Depends(get_current_admin),
+):
+    """获取电力电量平衡结果图表数据
+    
+    支持根据登录用户名和日期动态获取对应的火电、风电、光伏、水电、总负荷数据
+    - 自主申报：use_default_case=false，根据用户名生成 case_id（如 G14->Output14）
+    - 理性申报：use_default_case=true，固定使用 Output0
+    
+    :param day_index: 第几天，从 1 开始计数，第一天为 20260319
+    :param use_default_case: 是否使用默认案例 Output0
+                           - true: 使用 Output0（理性申报）
+                           - false: 使用用户名关联的 case_id（自主申报，如 G14->Output14）
+    :return: 包含 thermal, wind, solar, hydro, load 数组的数据对象
+    """
+    try:
+        service = PowerBalanceService()
+        
+        # 基础日期
+        base_date_str = "20260319"
+        
+        # 计算实际日期（day_index 从 1 开始，所以偏移量为 day_index - 1）
+        day_offset = day_index - 1
+        
+        # 获取当前用户名
+        username = current_admin.username
+        
+        # 根据参数决定使用的 case_id
+        if use_default_case:
+            # 理性申报：固定使用 Output0
+            case_id = "Output0"
+            query_date_str = service.calculate_date_str(base_date_str, day_offset)
+            
+            # 直接查询 Output0 的数据
+            balance_data = service.get_balance_data_by_case_id(
+                db=db,
+                case_id=case_id,
+                date_str=query_date_str
+            )
+        else:
+            # 自主申报：根据用户名生成 case_id（带降级处理）
+            balance_data = service.get_balance_data_with_fallback(
+                db=db,
+                username=username,
+                date_str=base_date_str,
+                day_offset=day_offset
+            )
+        
+        # 打印调试信息
+        print(f"\n[能源平衡 API] 请求参数:")
+        print(f"  day_index: {day_index}")
+        print(f"  use_default_case: {use_default_case}")
+        print(f"  username: {username}")
+        print(f"  使用的 case_id: {balance_data.get('case_id')}")
+        print(f"  查询的日期：{balance_data.get('date_str')}")
+        print(f"  数据长度：thermal={len(balance_data['thermal'])}, wind={len(balance_data['wind'])}, "
+              f"solar={len(balance_data['solar'])}, hydro={len(balance_data['hydro'])}, "
+              f"load={len(balance_data['load'])}")
+        
+        return balance_data
+    
+    except Exception as e:
+        print(f"[能源平衡 API] 获取数据失败：{e}")
+        import traceback
+        traceback.print_exc()
+        # 返回空数据结构
+        return {
+            "thermal": [],
+            "wind": [],
+            "solar": [],
+            "hydro": [],
+            "load": [],
+            "periods": 96,
+            "date_str": "",
+            "case_id": ""
+        }
+
+
+# ==================== 自主申报 - 机组中标结果 ====================
+
+@router.get("/unit-bid-results")
+def get_unit_bid_results(
+    unit_id: str = Query(..., description="机组 ID，如 Thermal_1"),
+    day_index: int = Query(1, description="第几天，从 1 开始（第一天=20260319）"),
+    use_default_case: bool = Query(False, description="是否使用默认 case_id(Output0)，用于理性申报页面"),
+    db: Session = Depends(get_db),
+    current_admin=Depends(get_current_admin),
+):
+    """获取机组中标结果数据（中标出力与均价）
+    
+    支持根据登录用户名和日期动态获取对应的机组中标数据
+    - use_default_case=false: 根据用户名生成 case_id（如 G14->Output14）- 自主申报
+    - use_default_case=true: 使用固定 Output0 - 理性申报
+    - 查询指定机组的 sol_type 为'中标出力 (MW)'和'中标均价 (元/MWh)'的数据
+    - 日期从 20260319 开始，第二天递增
+    
+    :param unit_id: 机组 ID
+    :param day_index: 第几天，从 1 开始计数，第一天为 20260319
+    :param use_default_case: 是否使用默认 case_id(Output0)
+    :return: 包含 output_values（中标出力）, price_values（中标均价）, revenue_values（中标收益）的数据对象
+    """
+    try:
+        # 基础日期
+        base_date_str = "20260319"
+        
+        # 计算实际日期（day_index 从 1 开始，所以偏移量为 day_index - 1）
+        day_offset = day_index - 1
+        
+        # 根据 use_default_case 参数决定 case_id
+        if use_default_case:
+            # 理性申报：使用固定的 Output0
+            case_id = "Output0"
+            username = "rational_declare"
+        else:
+            # 自主申报：根据用户名生成 case_id
+            username = current_admin.username
+            import re
+            match = re.search(r'\d+', username)
+            if match:
+                num = match.group()
+                case_id = f"Output{num}"
+            else:
+                # 如果用户名中没有数字，降级处理使用 Output0
+                print(f"[机组中标结果 API] 警告：用户名 {username} 中没有数字，使用 Output0")
+                case_id = "Output0"
+        
+        # 计算查询日期
+        from datetime import timedelta
+        base_date = datetime.strptime(base_date_str, "%Y%m%d")
+        query_date = base_date + timedelta(days=day_offset)
+        query_date_str = query_date.strftime("%Y%m%d")
+        
+        print(f"\n[机组中标结果 API] 请求参数:")
+        print(f"  unit_id: {unit_id}")
+        print(f"  day_index: {day_index}")
+        print(f"  username: {username}")
+        print(f"  生成的 case_id: {case_id}")
+        print(f"  查询的日期：{query_date_str}")
+        
+        # 查询中标出力数据 - 使用 LIKE 模糊匹配以容忍空格等格式差异
+        output_record = db.query(OutputUnitBidResults).filter(
+            OutputUnitBidResults.unit_id == unit_id,
+            OutputUnitBidResults.sol_type.like("%中标出力%"),
+            OutputUnitBidResults.case_id == case_id,
+            OutputUnitBidResults.date_str == query_date_str
+        ).first()
+        
+        # 查询中标均价数据 - 使用 LIKE 模糊匹配以容忍空格等格式差异
+        price_record = db.query(OutputUnitBidResults).filter(
+            OutputUnitBidResults.unit_id == unit_id,
+            OutputUnitBidResults.sol_type.like("%中标均价%"),
+            OutputUnitBidResults.case_id == case_id,
+            OutputUnitBidResults.date_str == query_date_str
+        ).first()
+        
+        print(f"[机组中标结果 API] 初步查询结果:")
+        print(f"  中标出力记录：{'✅ 找到' if output_record else '❌ 未找到'}")
+        print(f"  中标均价记录：{'✅ 找到' if price_record else '❌ 未找到'}")
+        
+        # 如果没有找到数据，尝试使用 Output0
+        if not output_record or not price_record:
+            print(f"[机组中标结果 API] 警告：未找到 {case_id} 的数据，尝试使用 Output0")
+            output_record = db.query(OutputUnitBidResults).filter(
+                OutputUnitBidResults.unit_id == unit_id,
+                OutputUnitBidResults.sol_type.like("%中标出力%"),
+                OutputUnitBidResults.case_id == "Output0",
+                OutputUnitBidResults.date_str == query_date_str
+            ).first()
+            
+            price_record = db.query(OutputUnitBidResults).filter(
+                OutputUnitBidResults.unit_id == unit_id,
+                OutputUnitBidResults.sol_type.like("%中标均价%"),
+                OutputUnitBidResults.case_id == "Output0",
+                OutputUnitBidResults.date_str == query_date_str
+            ).first()
+            
+            if output_record or price_record:
+                print(f"[机组中标结果 API] 已从 Output0 获取数据")
+        
+        if not output_record and not price_record:
+            # 诊断信息：数据库中实际存在的 case_id
+            all_case_ids = db.query(OutputUnitBidResults.case_id).distinct().all()
+            case_id_list = [c[0] for c in all_case_ids]
+            
+            # 诊断信息：数据库中实际存在的 sol_type
+            all_sol_types = db.query(OutputUnitBidResults.sol_type).distinct().all()
+            sol_type_list = [s[0] for s in all_sol_types]
+            
+            print(f"[机组中标结果 API] 错误：未找到机组 {unit_id} 在日期 {query_date_str} 的任何数据")
+            print(f"[诊断信息]")
+            print(f"  请求的 case_id: {case_id}")
+            print(f"  数据库中存在的 case_id: {case_id_list}")
+            print(f"  数据库中存在的 sol_type: {sol_type_list}")
+            
+            return {
+                "output_values": [],
+                "price_values": [],
+                "revenue_values": [],
+                "case_id": case_id,
+                "date_str": query_date_str,
+                "unit_id": unit_id
+            }
+        
+        # 获取 t1-t96 的值
+        output_values = output_record.period_values if output_record else [0.0] * 96
+        price_values = price_record.period_values if price_record else [0.0] * 96
+        
+        # 计算中标收益：中标出力 × 中标均价 × 0.25
+        revenue_values = []
+        for i in range(96):
+            output = output_values[i] if i < len(output_values) else 0.0
+            price = price_values[i] if i < len(price_values) else 0.0
+            revenue = output * price * 0.25
+            revenue_values.append(revenue)
+        
+        print(f"[机组中标结果 API] 成功获取数据:")
+        print(f"  中标出力有效数据点：{len([v for v in output_values if v > 0])}")
+        print(f"  中标均价有效数据点：{len([v for v in price_values if v > 0])}")
+        print(f"  中标收益有效数据点：{len([v for v in revenue_values if v > 0])}")
+        
+        return {
+            "output_values": output_values,
+            "price_values": price_values,
+            "revenue_values": revenue_values,
+            "case_id": case_id,
+            "date_str": query_date_str,
+            "unit_id": unit_id
+        }
+    
+    except Exception as e:
+        print(f"[机组中标结果 API] 获取数据失败：{e}")
+        import traceback
+        traceback.print_exc()
+        return {
+            "output_values": [],
+            "price_values": [],
+            "revenue_values": [],
+            "case_id": "",
+            "date_str": "",
+            "unit_id": unit_id
+        }

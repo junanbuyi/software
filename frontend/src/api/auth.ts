@@ -11,7 +11,11 @@ export type TokenResponse = {
 };
 
 export const login = async (payload: LoginPayload) => {
-  const { data } = await apiClient.post<TokenResponse>("/auth/login", payload);
+  const { data } = await apiClient.post<TokenResponse>("/auth/login", payload, {
+    headers: {
+      "Content-Type": "application/json",
+    },
+  });
   return data;
 };
 

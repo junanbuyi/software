@@ -28,6 +28,7 @@ from app.models.market import (
     MarketLoad,
 )
 from app.models.tcn_prediction import TcnProbPrediction
+from app.models.output_power_balance import OutputPowerBalanceSheet
 
 __all__ = [
     "AdminUser",
@@ -58,5 +59,8 @@ __all__ = [
     "MarketOutResult",
     "MarketDayAheadQuote",
     "MarketLoad",
+    "InputDayAheadUnitQuote",
+    "OutputEnergyMarketOverview",
+    "OutputThermalPlantRevenue",
+    "OutputClearingPrice",
 ]
-
