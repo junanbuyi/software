@@ -358,7 +358,9 @@ onMounted(() => {
 
 <style scoped>
 .content-section {
-  max-width: 1100px;
+  max-width: 1300px;
+  margin: 0 auto;
+  padding: 16px;
 }
 .section-title {
   font-size: 18px;
