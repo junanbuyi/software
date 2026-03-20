@@ -47,7 +47,7 @@
               <div class="result-label">申报均价(元/MWh)</div>
             </div>
             <div class="result-item">
-              <div class="result-value">{{ formatDiffValue(overviewData.energy_market.supply_demand_ratio, rationalOverviewData.energy_market.supply_demand_ratio) }}</div>
+              <div class="result-value">{{ formatSingleValue(overviewData.energy_market.supply_demand_ratio) }}</div>
               <div class="result-label">供需比</div>
             </div>
           </div>
@@ -81,11 +81,11 @@
               <div class="result-label">总装机容量(100MW)</div>
             </div>
             <div class="result-item">
-              <div class="result-value">{{ formatDiffValue(overviewData.energy_market.plant_count, rationalOverviewData.energy_market.plant_count) }}</div>
+              <div class="result-value">{{ formatSingleValue(overviewData.energy_market.plant_count) }}</div>
               <div class="result-label">发电企业数目</div>
             </div>
             <div class="result-item">
-              <div class="result-value">{{ formatDiffValue(overviewData.energy_market.quote_unit_count, rationalOverviewData.energy_market.quote_unit_count) }}</div>
+              <div class="result-value">{{ formatSingleValue(overviewData.energy_market.quote_unit_count) }}</div>
               <div class="result-label">申报机组数目</div>
             </div>
             <div class="result-item">
@@ -176,7 +176,7 @@
           <div class="result-row row-4">
             <div class="result-item">
               <div class="result-label">火电厂名称</div>
-              <div class="result-value">{{ currentCompanyName }}</div>
+              <div class="result-value">{{ formatSingleValue(g13SettlementData?.name) }}</div>
             </div>
             <div class="result-item">
               <div class="result-label">运行成本(万元)</div>
@@ -742,7 +742,7 @@ const currentDayLabel = computed(() => {
 const formatDiffValue = (selfValue: any, rationalValue: any): string => {
   // 如果任一值不存在或为null/undefined，则返回0
   if (selfValue == null || rationalValue == null) {
-    return "0";
+    return "+0";
   }
   
   // 确保值是数字类型
@@ -751,7 +751,7 @@ const formatDiffValue = (selfValue: any, rationalValue: any): string => {
   
   // 如果转换后不是有效数字，返回0
   if (isNaN(selfNum) || isNaN(rationalNum)) {
-    return "0";
+    return "+0";
   }
   
   // 计算差值（自主报价 - 理性报价）
@@ -768,14 +768,34 @@ const formatDiffValue = (selfValue: any, rationalValue: any): string => {
     return str;
   };
   
-  // 格式化显示，如果是正数则添加+号，负数则保留-号
+  // 格式化显示，如果是正数或0则添加+号，负数则保留-号
   if (diff > 0) {
     return "+" + formatNumber(diff);
   } else if (diff < 0) {
     return formatNumber(diff); // 负数本身带-号
   } else {
+    return "+0";
+  }
+};
+
+// 格式化单个值显示（不计算差值），用于显示实际数值
+const formatSingleValue = (value: any): string => {
+  if (value == null) {
     return "0";
   }
+  
+  const num = Number(value);
+  
+  if (isNaN(num)) {
+    return "0";
+  }
+  
+  // 格式化显示，最多两位小数，末尾0舍去
+  let str = num.toFixed(2);
+  if (str.includes('.')) {
+    str = str.replace(/\.?0+$/, '');
+  }
+  return str;
 };
 
 // Tab切换处理
