@@ -3,6 +3,28 @@
     <h2 class="section-title">市场交易</h2>
     <!-- 机组报价详情 -->
     <div v-if="g13Company" class="card">
+      <div v-if="uiNotice" class="toast">{{ uiNotice }}</div>
+      <div v-if="isCoreModelRunning" class="core-model-mask">
+        <div class="core-model-panel">
+          <div class="core-model-title">{{ coreTitle }}</div>
+          <div class="core-model-subtitle">{{ coreSubtitle }}</div>
+          <div class="core-progress">
+            <div class="core-progress-bar" :style="{ width: coreProgress + '%' }"></div>
+          </div>
+          <div class="core-progress-text">{{ coreProgress }}%</div>
+          <div class="core-steps">
+            <div
+              v-for="(step, index) in coreSteps"
+              :key="step"
+              :class="['core-step', { active: index === coreStep, done: index < coreStep }]"
+            >
+              <span class="core-dot"></span>
+              <span class="core-step-text">{{ step }}</span>
+            </div>
+          </div>
+          <div class="core-log">[{{ coreProgress }}%] {{ coreSteps[coreStep] }}</div>
+        </div>
+      </div>
       <!-- 调整后的顶端栏：左侧机组 + 中部日期 + 右侧按钮 -->
       <div class="card-header-row">
         <!-- 左侧：机组下拉筛选 -->
@@ -29,17 +51,17 @@
 
         <!-- 右侧：功能按钮 -->
         <div>
-          <button class="btn primary sm" @click="tradingSelected = null">提交报价</button>
-          <button class="btn outline sm" style="margin-left: 8px;" @click="tradingSelected = null">取消</button>
-          <button class="btn primary sm" style="margin-left: 8px;" @click="refreshData">刷新数据</button>
+          <button class="btn primary sm" :disabled="isCoreModelRunning || isSubmitting || isRefreshing" @click="handleSubmitQuote">提交报价</button>
+          <button class="btn outline sm" :disabled="isCoreModelRunning || isSubmitting || isRefreshing" style="margin-left: 8px;" @click="tradingSelected = null">取消</button>
+          <button class="btn primary sm" :disabled="isCoreModelRunning || isSubmitting || isRefreshing" style="margin-left: 8px;" @click="handleRefresh">刷新数据</button>
         </div>
       </div>
 
       <div class="trading-grid">
         <div class="trading-left">
           <h4>电能量市场申报</h4>
-          <button class="btn outline sm" style="margin-bottom: 12px;" @click="handleStrategyQuote">选择智能报价</button>
-          <button class="btn outline sm" style="margin-left: 8px;" @click="handleMarketClear">市场出清</button>
+          <button class="btn outline sm" :disabled="isCoreModelRunning" style="margin-bottom: 12px;" @click="handleStrategyQuote">选择智能报价</button>
+          <button class="btn outline sm" :disabled="isCoreModelRunning" style="margin-left: 8px;" @click="handleMarketClear">市场出清</button>
           <div class="data-table-wrap">
             <table class="data-table">
               <thead><tr><th>分段</th><th>起始出力(MW)</th><th>终止出力(MW)</th><th>分段报价(元/MWh)</th></tr></thead>
@@ -106,6 +128,107 @@ const tradingSelected = ref<any>(null);
 const customBidSegments = ref<any[]>([]);
 const currentUser = ref<any>(null);
 
+const isCoreModelRunning = ref(false);
+const coreProgress = ref(0);
+const coreStep = ref(0);
+const coreTitle = "\u6838\u5fc3\u6a21\u578b\u8c03\u7528\u4e2d";
+const coreSubtitle = "\u6b63\u5728\u751f\u6210\u6700\u4f18\u62a5\u4ef7\u66f2\u7ebf";
+const coreSteps = [
+  "\u52a0\u8f7d\u5e02\u573a\u6570\u636e",
+  "\u8c03\u7528\u7b56\u7565\u5e93",
+  "\u751f\u6210\u62a5\u4ef7\u66f2\u7ebf",
+  "\u6821\u9a8c\u7ea6\u675f\u6761\u4ef6",
+  "\u8f93\u51fa\u6700\u4f18\u62a5\u4ef7"
+];
+let coreTimer: number | undefined;
+
+const startCoreModelSimulation = () => {
+  if (isCoreModelRunning.value) return;
+  isCoreModelRunning.value = true;
+  coreProgress.value = 0;
+  coreStep.value = 0;
+
+  const totalMs = 2200;
+  const stepMs = 120;
+  const ticks = Math.max(1, Math.ceil(totalMs / stepMs));
+  let count = 0;
+
+  coreTimer = window.setInterval(() => {
+    count += 1;
+    const pct = Math.min(100, Math.round((count / ticks) * 100));
+    coreProgress.value = pct;
+    const idx = Math.min(coreSteps.length - 1, Math.floor((pct / 100) * coreSteps.length));
+    coreStep.value = idx;
+
+    if (pct >= 100) {
+      window.clearInterval(coreTimer);
+      coreTimer = undefined;
+      window.setTimeout(() => {
+        isCoreModelRunning.value = false;
+        coreStep.value = coreSteps.length - 1;
+      }, 300);
+    }
+  }, stepMs);
+};
+const uiNotice = ref("");
+const isSubmitting = ref(false);
+const isRefreshing = ref(false);
+let noticeTimer: number | undefined;
+
+const showNotice = (message: string, timeout = 1600) => {
+  uiNotice.value = message;
+  if (noticeTimer) {
+    window.clearTimeout(noticeTimer);
+  }
+  noticeTimer = window.setTimeout(() => {
+    uiNotice.value = "";
+  }, timeout);
+};
+
+const handleSubmitQuote = async () => {
+  if (isSubmitting.value) return;
+  if (!tradingUnit.value) {
+    showNotice("\u8bf7\u5148\u9009\u62e9\u673a\u7ec4", 1400);
+    return;
+  }
+  isSubmitting.value = true;
+  showNotice("\u6b63\u5728\u63d0\u4ea4\u62a5\u4ef7\u5230\u6570\u636e\u5e93...", 1400);
+  try {
+    await marketApi.submitInputDayAheadQuotes({
+      unit_id: tradingUnit.value,
+      data_date: currentDay.value,
+      use_default_case: tradingMode.value !== "bid",
+      segments: customBidSegments.value.map((seg: any, idx: number) => ({
+        start: Number(seg.start) || 0,
+        end: Number(seg.end) || 0,
+        price: Number(seg.price) || 0,
+        quote_time: seg.quote_time ?? idx + 1,
+        quote_section: seg.quote_section || `Q${idx + 1}`,
+        market_name: seg.market_name || "\u7535\u80fd\u91cf\u5e02\u573a\u7533\u62a5"
+      }))
+    });
+    showNotice("\u62a5\u4ef7\u5df2\u4fdd\u5b58", 1400);
+    await fetchInputDayAheadQuotes();
+  } catch (e) {
+    showNotice("\u63d0\u4ea4\u5931\u8d25", 1600);
+  } finally {
+    isSubmitting.value = false;
+  }
+};
+
+const handleRefresh = async () => {
+  if (isRefreshing.value) return;
+  isRefreshing.value = true;
+  showNotice("\u6b63\u5728\u5237\u65b0\u6570\u636e...", 1200);
+  await refreshData();
+  showNotice("\u6570\u636e\u5df2\u5237\u65b0", 1400);
+  isRefreshing.value = false;
+};
+
+const lastUnit = ref<string | null>(null);
+
+
+
 // 日期切换处理方法
 const handleDayChange = (dayKey: string) => {
   currentDay.value = dayKey;
@@ -115,6 +238,7 @@ const handleDayChange = (dayKey: string) => {
 
 // 选择策略报价处理方法
 const handleStrategyQuote = () => {
+  startCoreModelSimulation();
   tradingMode.value = 'bid';
   // 重新获取数据并初始化报价分段
   fetchInputDayAheadQuotes();
@@ -274,6 +398,11 @@ const bidSegments = computed(() => {
 // 监听交易单位变化，重新获取数据
 watch(tradingUnit, () => {
   fetchInputDayAheadQuotes();
+  if (tradingUnit.value && lastUnit.value && tradingUnit.value != lastUnit.value) {
+    const label = tradingUnit.value.replace('Thermal_', 'G');
+    showNotice(`\u5df2\u5207\u6362\u81f3\u673a\u7ec4 ${label}`, 1200);
+  }
+  lastUnit.value = tradingUnit.value || null;
 });
 
 // 监听日期变化，重新获取数据
@@ -369,6 +498,7 @@ onMounted(() => {
   margin: 0 0 16px;
 }
 .card {
+  position: relative;
   background: #fff;
   border-radius: 8px;
   padding: 20px 24px;
@@ -594,4 +724,96 @@ onMounted(() => {
   padding: 4px 12px;
   font-size: 12px;
 }
+
+.core-model-mask {
+  position: absolute;
+  inset: 0;
+  background: rgba(7, 15, 30, 0.55);
+  backdrop-filter: blur(2px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 5;
+  border-radius: 8px;
+}
+.core-model-panel {
+  width: min(520px, 92%);
+  background: #0c1b2a;
+  color: #e6f0ff;
+  border: 1px solid rgba(120, 170, 255, 0.25);
+  border-radius: 12px;
+  padding: 20px 24px;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.25);
+}
+.core-model-title {
+  font-size: 16px;
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+.core-model-subtitle {
+  font-size: 12px;
+  color: #b7c7e6;
+  margin-bottom: 12px;
+}
+.core-progress {
+  width: 100%;
+  height: 8px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.core-progress-bar {
+  height: 100%;
+  background: linear-gradient(90deg, #4cc3ff 0%, #66ffb3 100%);
+  transition: width 0.2s ease;
+}
+.core-progress-text {
+  font-size: 12px;
+  color: #d6e6ff;
+  margin: 6px 0 10px;
+}
+.core-steps {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px 16px;
+  margin-bottom: 10px;
+}
+.core-step {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: #8fa6c8;
+}
+.core-step.active {
+  color: #e6f0ff;
+}
+.core-step.done {
+  color: #7fe3b8;
+}
+.core-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.core-log {
+  font-size: 12px;
+  color: #9fb8dd;
+}
+
+
+.toast {
+  position: absolute;
+  top: 12px;
+  right: 16px;
+  background: rgba(12, 27, 42, 0.9);
+  color: #e6f0ff;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.2);
+  z-index: 6;
+}
+
 </style>

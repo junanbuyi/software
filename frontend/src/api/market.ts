@@ -35,6 +35,20 @@ export interface UnitBidResultsData {
   unit_id: string;           // 机组 ID (如 Thermal_1)
 }
 
+export interface SubmitInputDayAheadQuotesPayload {
+  unit_id: string;
+  data_date: string;
+  use_default_case?: boolean;
+  segments: Array<{
+    start: number;
+    end: number;
+    price: number;
+    quote_time?: number;
+    quote_section?: string;
+    market_name?: string;
+  }>;
+}
+
 export const marketApi = {
   getCompanies: () => apiClient.get("/market/companies"),
   getWindUnits: () => apiClient.get("/market/wind-units"),
@@ -51,6 +65,8 @@ export const marketApi = {
     apiClient.get("/market/day-ahead-quotes", { params }),
   getInputDayAheadQuotes: (params?: { unit_id?: string; data_date?: string; use_default_case?: boolean }) =>
     apiClient.get("/market/input-day-ahead-quotes", { params }),
+  submitInputDayAheadQuotes: (payload: SubmitInputDayAheadQuotesPayload) =>
+    apiClient.post("/market/input-day-ahead-quotes", payload),
   getSettlementOverview: (dayIndex?: number, useDefaultCase: boolean = false) => apiClient.get("/market/settlement-overview", { 
     params: { day_index: dayIndex || 1, use_default_case: useDefaultCase } 
   }),

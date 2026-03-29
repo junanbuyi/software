@@ -147,7 +147,10 @@ def load_epf_model_metrics(model_name: str) -> tuple[Dict[str, float], str]:
 
 
 def score_epf_metrics(metrics: Dict[str, float]) -> float:
-    return round(_absolute_metric_score(metrics), 6)
+    # 评分 = 100 * (1 - IMAPE)
+    mape_150 = _clamp(metrics["MAPE_150"], 0.0, 2.0)
+    score = max(0.0, min(100.0, (1.0 - mape_150) * 100.0))
+    return round(score, 6)
 
 
 def _run_epf_retrain(timeout_seconds: int) -> tuple[bool, str]:
@@ -191,23 +194,9 @@ def _clamp(value: float, lower: float, upper: float) -> float:
 
 
 def _absolute_metric_score(metrics: Dict[str, float]) -> float:
+    # Legacy placeholder to preserve call sites; now only IMAPE is used.
     mape_150 = _clamp(metrics["MAPE_150"], 0.0, 2.0)
-    mae = max(0.0, metrics["MAE"])
-    rmse = max(0.0, metrics["RMSE"])
-    r2 = _clamp(metrics["R2"], 0.0, 1.0)
-
-    # Lower-is-better terms converted to [0,1]
-    mape_score = 1.0 - (mape_150 / 2.0)
-    mae_score = 1.0 / (1.0 + mae / 80.0)
-    rmse_score = 1.0 / (1.0 + rmse / 100.0)
-
-    components = {
-        "MAPE_150": _clamp(mape_score, 0.0, 1.0),
-        "MAE": _clamp(mae_score, 0.0, 1.0),
-        "RMSE": _clamp(rmse_score, 0.0, 1.0),
-        "R2": r2,
-    }
-    return sum(components[name] * METRIC_WEIGHTS[name] for name in METRIC_WEIGHTS)
+    return max(0.0, min(1.0, 1.0 - mape_150))
 
 
 def _collect_candidates_from_all_results() -> tuple[List[EpfCandidate], str]:
@@ -235,7 +224,7 @@ def _collect_candidates_from_all_results() -> tuple[List[EpfCandidate], str]:
         candidates.append(
             EpfCandidate(
                 model_name=model_name,
-                score=round(_absolute_metric_score(metrics), 6),
+                score=score_epf_metrics(metrics),
                 metrics=metrics,
                 source_file=str(latest),
             )

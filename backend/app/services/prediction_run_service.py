@@ -51,7 +51,8 @@ def compute_metrics(actuals: list[float], preds: list[float]) -> RunMetrics:
     mae = _safe_mean(abs_errors)
     rmse = sqrt(_safe_mean(sq_errors))
     imape = _safe_mean(imapes)
-    score = max(0.0, min(1.0, 1.0 - imape))
+    # 评分 = 100 * (1 - MAPE)
+    score = max(0.0, min(100.0, (1.0 - imape) * 100.0))
 
     mean_actual = _safe_mean(actuals)
     ss_res = sum((p - a) ** 2 for a, p in zip(actuals, preds))

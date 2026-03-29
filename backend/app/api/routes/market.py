@@ -4,6 +4,7 @@ from datetime import datetime, timedelta, date as date_type
 from typing import Optional, List, Dict, Any
 
 from fastapi import APIRouter, Depends, Query
+from pydantic import BaseModel
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
@@ -29,6 +30,22 @@ from app.models.output_power_balance import OutputPowerBalanceSheet, OutputUnitB
 from app.services.power_balance_service import PowerBalanceService
 
 router = APIRouter()
+
+
+class InputDayAheadQuoteSegment(BaseModel):
+    start: float
+    end: float
+    price: float
+    quote_time: int | None = None
+    quote_section: str | None = None
+    market_name: str | None = None
+
+
+class InputDayAheadQuoteSubmit(BaseModel):
+    unit_id: str
+    data_date: str
+    use_default_case: bool = False
+    segments: list[InputDayAheadQuoteSegment]
 
 
 # ==================== 企业信息 ====================
@@ -322,6 +339,67 @@ def get_input_day_ahead_quotes(
             for q in quotes
         ]
     }
+
+
+@router.post("/input-day-ahead-quotes")
+def submit_input_day_ahead_quotes(
+    payload: InputDayAheadQuoteSubmit,
+    db: Session = Depends(get_db),
+    current_admin=Depends(get_current_admin),
+):
+    """提交输入日前市场报价（写入数据库）"""
+    # 确定 case_id
+    if payload.use_default_case:
+        case_id = "Input0"
+    else:
+        username = current_admin.username
+        import re
+        match = re.search(r'\d+', username)
+        if match:
+            num = match.group()
+            case_id = f"Input{num}"
+        else:
+            case_id = "Input0"
+
+    if not payload.segments:
+        return {"ok": False, "detail": "no segments"}
+
+    # 清理同一日期、同一机组、同一 case 的旧数据
+    db.query(InputDayAheadUnitQuote).filter(
+        InputDayAheadUnitQuote.case_id == case_id,
+        InputDayAheadUnitQuote.UnitId == payload.unit_id,
+        InputDayAheadUnitQuote.data_date == payload.data_date,
+    ).delete(synchronize_session=False)
+
+    # 生成新的 QuoteId
+    max_id = db.query(func.max(InputDayAheadUnitQuote.QuoteId)).scalar() or 0
+    next_id = int(max_id)
+
+    rows = []
+    for idx, seg in enumerate(payload.segments, start=1):
+        next_id += 1
+        quote_time = seg.quote_time if seg.quote_time is not None else idx
+        quote_section = seg.quote_section or f"Q{idx}"
+        market_name = seg.market_name or "电能量市场申报"
+        capacity = max(0.0, float(seg.end) - float(seg.start))
+        rows.append(
+            InputDayAheadUnitQuote(
+                QuoteId=next_id,
+                UnitId=payload.unit_id,
+                MarketName=market_name,
+                QuoteTime=int(quote_time),
+                QuoteSection=quote_section,
+                QuotePrice=float(seg.price),
+                QuoteCapacity=capacity,
+                IsUsed=True,
+                case_id=case_id,
+                data_date=payload.data_date,
+            )
+        )
+
+    db.add_all(rows)
+    db.commit()
+    return {"ok": True, "case_id": case_id, "count": len(rows)}
 
 
 # ==================== 出清结果 ====================

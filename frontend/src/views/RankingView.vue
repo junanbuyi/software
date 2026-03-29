@@ -292,7 +292,7 @@ const toRow = (item: RankingSummary, index: number): RankingRow => ({
   rmse: item.rmse.toFixed(2),
   r2: item.r2.toFixed(4),
   imape: item.imape.toFixed(4),
-  score: (item.score * 100).toFixed(2),
+  score: item.score.toFixed(2),
 });
 
 const loadRankings = async (allowFallback = false) => {

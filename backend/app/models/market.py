@@ -188,8 +188,8 @@ class OutputClearingPrice(Base):
     __tablename__ = "output_clearing_price"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    bus_id: Mapped[str] = mapped_column(Text, nullable=True, index=True)
-    price_type: Mapped[str] = mapped_column(Text, nullable=True, index=True)
+    bus_id: Mapped[str] = mapped_column(String(50), nullable=True, index=True)
+    price_type: Mapped[str] = mapped_column(String(50), nullable=True, index=True)
     t1: Mapped[str] = mapped_column(Text, nullable=True)
     t2: Mapped[str] = mapped_column(Text, nullable=True)
     t3: Mapped[str] = mapped_column(Text, nullable=True)
@@ -286,5 +286,5 @@ class OutputClearingPrice(Base):
     t94: Mapped[str] = mapped_column(Text, nullable=True)
     t95: Mapped[str] = mapped_column(Text, nullable=True)
     t96: Mapped[str] = mapped_column(Text, nullable=True)
-    case_id: Mapped[str] = mapped_column(Text, nullable=True, index=True)
-    date_str: Mapped[str] = mapped_column(Text, nullable=True, index=True)
+    case_id: Mapped[str] = mapped_column(String(50), nullable=True, index=True)
+    date_str: Mapped[str] = mapped_column(String(50), nullable=True, index=True)

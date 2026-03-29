@@ -440,7 +440,8 @@ def calculate_ranking_summary(
         mae = _safe_mean(abs_errors)
         rmse = sqrt(_safe_mean(sq_errors))
         imape = _safe_mean(imape_values)
-        score = max(0.0, min(1.0, 1.0 - imape))
+        # 评分 = 100 * (1 - MAPE)
+        score = max(0.0, min(100.0, (1.0 - imape) * 100.0))
 
         mean_actual = _safe_mean(actuals)
         ss_res = sum((pred - actual) ** 2 for actual, pred in zip(actuals, preds))

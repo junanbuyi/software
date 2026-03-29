@@ -20,7 +20,7 @@
           </div>
 
           <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 24px">
-            <span style="color: var(--muted); font-size: 12px">默认：admin / admin123</span>
+            <span style="color: var(--muted); font-size: 12px">默认：G13 / admin123</span>
             <button class="btn primary" type="button" @click="handleLogin" :disabled="loading">
               {{ loading ? "登录中..." : "登录" }}
             </button>
@@ -45,7 +45,7 @@ const loading = ref(false);
 const error = ref("");
 
 const form = reactive({
-  username: "admin",
+  username: "G13",
   password: "admin123",
 });
 
